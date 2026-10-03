@@ -1,5 +1,6 @@
 # Games Hub — Block Duel
 
+[![CI](https://github.com/slaidayZ/games-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/slaidayZ/games-hub/actions/workflows/ci.yml)
 [![Solana Devnet](https://img.shields.io/badge/Solana-Devnet-9945FF?logo=solana&logoColor=white)](https://solana.com/developers)
 [![Anchor](https://img.shields.io/badge/Anchor-0.31.1-blue)](https://www.anchor-lang.com/)
 [![Status](https://img.shields.io/badge/Status-Prototype-orange)](#current-status-and-safety)
@@ -11,15 +12,12 @@
 
 ---
 
-![Games Hub Screenshot](assets/project.jpg)
-
----
-
 ## Submission to 2026 Solana National Hackathon
 
 | Name | Role | Contact |
 |------|------|---------|
 | slaidayZ | Founder | [GitHub](https://github.com/slaidayZ) |
+| Maxim Afanasyev | Contributor | [GitHub](https://github.com/norm4el) |
 
 ---
 
@@ -153,7 +151,12 @@ Before any mainnet use, the game result must be verified independently, key mana
 - [GitHub repository](https://github.com/slaidayZ/games-hub)
 - [Anchor program source](programs/games_hub_bets/src/lib.rs)
 - [Anchor program guide](programs/games_hub_bets/README.md)
-- Live application and demo video: not published yet.
+- [Deployed program on Solana Explorer](https://explorer.solana.com/address/CGU9v9Zt1PJECyZDcXVJpgzjukxy2ejAXbN1bUbGE8tq?cluster=devnet)
+- Presentation, social profiles, live application, and demo video: not published yet.
+
+## Continuous Integration
+
+GitHub Actions runs on pushes and pull requests to `main`. The workflow installs the Node.js dependencies, checks the server and browser JavaScript syntax, and runs `anchor build` for the Solana program using the Anchor 0.31.1 toolchain.
 
 ## License
 

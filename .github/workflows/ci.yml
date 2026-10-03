@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Check server JavaScript syntax
+        run: node --check server.js
+
+      - name: Check browser JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script\b[^>]*>(.*?)</script\s*>", html, flags=re.IGNORECASE | re.DOTALL)
+          inline_scripts = "\n".join(script for script in scripts if script.strip())
+          Path("/tmp/games-hub-inline.js").write_text(inline_scripts, encoding="utf-8")
+          PY
+          node --check /tmp/games-hub-inline.js
+
+      - name: Build Solana program with Anchor 0.31.1
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace"
+          --workdir /workspace
+          solanafoundation/anchor:0.31.1
+          anchor build
