@@ -1,0 +1,1890 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BLOCK DUEL — 2-Player Local Tetris on Solana Testnet</title>
+  <meta name="description" content="2-Player local Tetris duel with Solana Phantom wallet registration in testnet mode.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>▦</text></svg>">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070a12;
+      --card-bg: rgba(13, 20, 33, 0.85);
+      --border: #223047;
+      --border-hover: #354b6e;
+      --text: #f0f4fc;
+      --text-muted: #8899b3;
+      --cyan: #38efdd;
+      --cyan-glow: rgba(56, 239, 221, 0.35);
+      --pink: #ff529a;
+      --pink-glow: rgba(255, 82, 154, 0.35);
+      --solana-purple: #9945ff;
+      --solana-green: #14f195;
+      --accent: #5e60ce;
+      --gold: #fbc02d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 50% -10%, #152038 0%, transparent 60%),
+                  radial-gradient(circle at 10% 30%, rgba(153, 69, 255, 0.08) 0%, transparent 40%),
+                  radial-gradient(circle at 90% 30%, rgba(20, 241, 149, 0.08) 0%, transparent 40%),
+                  var(--bg);
+      color: var(--text);
+      font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .shell {
+      width: min(1080px, 96%);
+      margin: 0 auto;
+      padding: 18px 12px 36px;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      margin-bottom: 16px;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--solana-purple), var(--solana-green));
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 900;
+      color: #000;
+      box-shadow: 0 0 15px rgba(20, 241, 149, 0.25);
+    }
+    h1 {
+      font-size: 19px;
+      margin: 0;
+      letter-spacing: 0.02em;
+      font-weight: 800;
+      background: linear-gradient(90deg, #fff, #b4c7e7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 2px;
+    }
+    .network-badge-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(18, 27, 43, 0.85);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--solana-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--solana-green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+    }
+    .cluster-select {
+      background: transparent;
+      color: var(--text);
+      border: none;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      outline: none;
+    }
+    .cluster-select option {
+      background: #0d1421;
+      color: #fff;
+    }
+    .protocol-warning {
+      background: rgba(255, 171, 0, 0.12);
+      border: 1px solid rgba(255, 171, 0, 0.35);
+      color: #ffd666;
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .protocol-warning a {
+      color: #fff;
+      font-weight: 700;
+      text-decoration: underline;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .hero h2 {
+      font-size: clamp(24px, 4vw, 34px);
+      margin: 0 0 6px;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+    }
+    .hero h2 span.p1-color { color: var(--cyan); text-shadow: 0 0 15px var(--cyan-glow); }
+    .hero h2 span.p2-color { color: var(--pink); text-shadow: 0 0 15px var(--pink-glow); }
+    .hero p {
+      color: var(--text-muted);
+      margin: 0;
+      font-size: 13px;
+    }    .wallet-section {
+      background: rgba(10, 16, 26, 0.65);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .wallet-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #b7c7de;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .wallets-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 768px) {
+      .wallets-grid { grid-template-columns: 1fr; }
+    }
+    .wallet-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      position: relative;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .wallet-card.p1 {
+      border-top: 3px solid var(--cyan);
+    }
+    .wallet-card.p1:hover {
+      box-shadow: 0 4px 20px rgba(56, 239, 221, 0.12);
+    }
+    .wallet-card.p2 {
+      border-top: 3px solid var(--pink);
+    }
+    .wallet-card.p2:hover {
+      box-shadow: 0 4px 20px rgba(255, 82, 154, 0.12);
+    }
+    .profile-history {
+      margin-top: 4px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 9px;
+      background: rgba(4, 9, 17, 0.48);
+    }
+    .profile-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .profile-history-title {
+      color: #dbe7f7;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .profile-history-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+    .profile-history-stat {
+      padding: 6px 4px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.035);
+      text-align: center;
+    }
+    .profile-history-stat strong {
+      display: block;
+      color: #f0f4fc;
+      font-size: 12px;
+    }
+    .profile-history-stat span {
+      color: var(--text-muted);
+      font-size: 8px;
+      text-transform: uppercase;
+    }
+    .profile-history-list {
+      display: grid;
+      gap: 5px;
+      max-height: 170px;
+      overflow: auto;
+    }
+    .profile-match-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.025);
+      font-size: 9px;
+    }
+    .profile-match-result { font-weight: 800; text-transform: uppercase; }
+    .profile-match-opponent { overflow: hidden; color: #c2cde0; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-match-time { color: var(--text-muted); font-size: 8px; }
+    .profile-history-empty { padding: 8px 2px; color: var(--text-muted); font-size: 9px; }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .player-tag {
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .p1 .player-tag { color: var(--cyan); }
+    .p2 .player-tag { color: var(--pink); }
+    .player-name-input {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      width: 110px;
+    }
+    .status-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+    }
+    .status-pill.registered {
+      background: rgba(20, 241, 149, 0.15);
+      color: var(--solana-green);
+      border: 1px solid rgba(20, 241, 149, 0.3);
+    }
+    .address-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #cfd9e8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      overflow: hidden;
+    }
+    .address-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .address-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      font-size: 11px;
+      border-radius: 4px;
+    }
+    .icon-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      padding: 4px 2px;
+    }
+    .balance-val {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sol-unit {
+      color: var(--solana-green);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    button {
+      font: inherit;
+      border: 1px solid var(--border);
+      background: #141c2c;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    button:hover:not(:disabled) {
+      border-color: var(--border-hover);
+      background: #1a253a;
+      transform: translateY(-1px);
+    }
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    button.btn-primary-p1 {
+      background: linear-gradient(135deg, #1aa497, var(--cyan));
+      color: #031412;
+      border: none;
+      box-shadow: 0 2px 10px rgba(56, 239, 221, 0.25);
+    }
+    button.btn-primary-p2 {
+      background: linear-gradient(135deg, #b0195e, var(--pink));
+      color: #fff;
+      border: none;
+      box-shadow: 0 2px 10px rgba(255, 82, 154, 0.25);
+    }
+    button.btn-subtle {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #b7c7de;
+      font-size: 11px;
+      padding: 6px 10px;
+    }
+    button.btn-subtle:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .btn-remove {
+      color: #ff758f;
+      border-color: rgba(255, 82, 154, 0.2);
+    }
+    .phantom-helper {
+      margin-top: 10px;
+      background: rgba(153, 69, 255, 0.08);
+      border: 1px solid rgba(153, 69, 255, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .phantom-helper strong {
+      color: #d1b3ff;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .phantom-helper ol {
+      margin: 4px 0 0 16px;
+      padding: 0;
+      color: #bfa5eb;
+    }
+    .arena-section {
+      background: rgba(10, 15, 25, 0.75);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .arena-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn-game-start {
+      background: linear-gradient(135deg, var(--solana-green), #0fb871);
+      color: #03140b;
+      font-size: 14px;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 800;
+      box-shadow: 0 4px 18px rgba(20, 241, 149, 0.35);
+    }
+    .btn-game-pause {
+      background: #172133;
+      border: 1px solid var(--border);
+      padding: 10px 18px;
+      border-radius: 10px;
+    }
+    .arena-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 20px;
+      align-items: center;
+    }
+    @media (max-width: 768px) {
+      .arena-grid { grid-template-columns: 1fr; gap: 16px; }
+      .vs-divider { display: none; }
+    }
+    .vs-divider {
+      font-size: 22px;
+      font-weight: 900;
+      color: #3b4e6d;
+      text-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    .player-board-panel {
+      background: linear-gradient(145deg, #101726, #0b101c);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .player-board-panel.p1 {
+      box-shadow: inset 0 0 25px rgba(56, 239, 221, 0.04);
+    }
+    .player-board-panel.p2 {
+      box-shadow: inset 0 0 25px rgba(255, 82, 154, 0.04);
+    }
+    .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .board-player-title {
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .board-player-title .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .p1 .board-player-title .dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .p2 .board-player-title .dot { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
+    .board-wallet-badge {
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 3px 7px;
+      border-radius: 6px;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-pill {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .stat-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      display: block;
+    }
+    .stat-value {
+      font-size: 15px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #fff;
+    }
+    .canvas-container {
+      position: relative;
+      width: min(100%, 220px);
+      margin: 0 auto;
+      background: #05080e;
+      border: 1px solid #233147;
+      border-radius: 10px;
+      padding: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    }
+    .garbage-preview {
+      display: grid;
+      gap: 5px;
+      padding: 7px 3px 2px;
+      border-top: 1px solid rgba(255, 82, 119, 0.28);
+    }
+    .garbage-preview[hidden] { display: none; }
+    .garbage-wave {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+    }
+    .garbage-countdown {
+      color: #ff9aab;
+      font: 800 10px ui-monospace, monospace;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .garbage-countdown::before {
+      content: 'INCOMING';
+      display: block;
+      color: #d47788;
+      font-size: 6px;
+      letter-spacing: 0.08em;
+    }
+    .garbage-wave-rows { display: grid; gap: 2px; }
+    .garbage-row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+    .garbage-cell {
+      height: 7px;
+      border-radius: 1px;
+      background: #aa4659;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.22);
+    }
+    .garbage-cell.hole {
+      background: transparent;
+      border: 1px dashed rgba(255, 154, 171, 0.5);
+      box-shadow: none;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 6px;
+      image-rendering: pixelated;
+    }
+    .board-overlay {
+      position: absolute;
+      inset: 4px;
+      border-radius: 6px;
+      background: rgba(5, 8, 14, 0.88);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 16px;
+      z-index: 10;
+    }
+    .board-overlay[hidden] { display: none; }
+    .board-overlay h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .board-overlay p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .controls-hint {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 10px;
+      color: #92a4bc;
+      text-align: center;
+      font-family: ui-monospace, monospace;
+    }
+    .history-section {
+      background: rgba(10, 16, 26, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 18px;
+    }
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .history-table th {
+      text-align: left;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .history-table td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      font-family: ui-monospace, monospace;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #152238;
+      border: 1px solid var(--border-hover);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 10px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      font-size: 13px;
+      z-index: 1000;
+      transition: all 0.3s ease;
+      transform: translateY(100px);
+      opacity: 0;
+      pointer-events: none;
+      max-width: 380px;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toast.success { border-color: var(--solana-green); box-shadow: 0 4px 20px rgba(20, 241, 149, 0.2); }
+    .toast.error { border-color: #ff5277; box-shadow: 0 4px 20px rgba(255, 82, 119, 0.2); }
+  </style>
+
+  <script src="/solanaWeb3.js" onerror="this.onerror=null;this.src='https://unpkg.com/@solana/web3.js@1.95.4/lib/index.iife.min.js';"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js';"></script>
+</head><body>
+
+<main class="shell">
+
+  <header class="top-bar">
+    <div class="logo-group">
+      <div class="logo-badge">▦</div>
+      <div>
+        <h1>BLOCK DUEL</h1>
+        <div class="tagline">Local 2-Player Tetris Duel · Solana Testnet</div>
+      </div>
+    </div>
+
+    <div class="network-badge-wrap">
+      <div class="status-dot"></div>
+      <label for="cluster-select" style="color:var(--text-muted);font-size:11px;">Network:</label>
+      <select id="cluster-select" class="cluster-select" aria-label="Solana Cluster">
+        <option value="testnet" selected>Solana Testnet</option>
+        <option value="devnet">Solana Devnet</option>
+        <option value="localnet">Localnet (localhost:8899)</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="file-protocol-warning" class="protocol-warning" style="display:none;">
+    <span>⚠️</span>
+    <div>
+      <strong>Notice for Phantom &amp; Browser Wallets:</strong> You are accessing this page directly via <code>file://</code> protocol. Chrome and Brave do not inject wallet extensions on local file URLs. Run <code>npm start</code> in your terminal and open <a href="http://localhost:3000" target="_blank">http://localhost:3000</a> so Phantom can connect seamlessly!
+    </div>
+  </div>
+
+  <section class="hero">
+    <h2><span class="p1-color">PLAYER 1</span> <span style="color:#576b88;font-size:0.7em;">VS</span> <span class="p2-color">PLAYER 2</span></h2>
+    <p>Two players share one computer in this tab. Connect &amp; register your Solana accounts to duel!</p>
+  </section>
+
+  <section class="wallet-section" aria-label="Wallet Registration">
+    <div class="wallet-section-header">
+      <div>
+        <div class="section-title">
+          <span>◈</span> Solana Wallet Account Registration
+        </div>
+        <div class="section-desc">Register Player 1 &amp; Player 2 accounts using Phantom in Testnet mode. Both players sign a free verification message.</div>
+      </div>
+    </div>
+
+    <div class="wallets-grid">
+
+      <!-- PLAYER 1 CARD (CYAN) -->
+      <article class="wallet-card p1" id="card-p1">
+        <div class="card-top">
+          <div class="player-tag">
+            <span>●</span>
+            <input type="text" id="name-p1" class="player-name-input" value="Player 1" maxlength="15" title="Player 1 display name">
+          </div>
+          <span class="status-pill" id="status-pill-p1">Not Registered</span>
+        </div>
+
+        <div class="address-box">
+          <span class="address-text" id="address-p1">Wallet: Not connected</span>
+          <div class="address-actions" id="actions-p1" style="display:none;">
+            <button class="icon-btn" id="copy-p1" title="Copy full address">📋</button>
+            <button class="icon-btn" id="explorer-p1" title="View on Solana Explorer">↗</button>
+          </div>
+        </div>
+
+        <div class="balance-row">
+          <span style="color:var(--text-muted);">Testnet Balance:</span>
+          <span class="balance-val">
+            <span id="bal-p1">---</span> <span class="sol-unit">SOL</span>
+            <button class="icon-btn" id="refresh-p1" title="Refresh balance" style="display:none;">🔄</button>
+          </span>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn-primary-p1" id="connect-p1">👻 Connect Phantom (P1)</button>
+          <button class="btn-subtle" id="airdrop-p1" title="Request 1 Testnet SOL from faucet">💧 Request 1 SOL</button>
+          <button class="btn-subtle" id="burner-p1" title="Instant 1-click testnet dev keypair">⚡ Quick Dev Key</button>
+          <button class="btn-subtle btn-remove" id="remove-p1" style="display:none;">Disconnect</button>
+        </div>
+
+        <div id="verified-info-p1" style="display:none; font-size:10px; color:#5cdba9;">
+          ✓ Cryptographically verified on Testnet
+        </div>
+        <section class="profile-history" aria-label="Player 1 wallet leaderboard and match history">
+          <div class="profile-history-header">
+            <span class="profile-history-title">This wallet · local record</span>
+            <button class="btn-subtle" id="clear-history-p1" style="font-size:9px;padding:3px 7px;">Clear</button>
+          </div>
+          <div class="profile-history-stats" id="history-stats-p1"></div>
+          <div class="profile-history-list" id="history-list-p1" aria-live="polite"></div>
+        </section>
+      </article>
+
+      <!-- PLAYER 2 CARD (PINK) -->
+      <article class="wallet-card p2" id="card-p2">
+        <div class="card-top">
+          <div class="player-tag">
+            <span>●</span>
+            <input type="text" id="name-p2" class="player-name-input" value="Player 2" maxlength="15" title="Player 2 display name">
+          </div>
+          <span class="status-pill" id="status-pill-p2">Not Registered</span>
+        </div>
+
+        <div class="address-box">
+          <span class="address-text" id="address-p2">Wallet: Not connected</span>
+          <div class="address-actions" id="actions-p2" style="display:none;">
+            <button class="icon-btn" id="copy-p2" title="Copy full address">📋</button>
+            <button class="icon-btn" id="explorer-p2" title="View on Solana Explorer">↗</button>
+          </div>
+        </div>
+
+        <div class="balance-row">
+          <span style="color:var(--text-muted);">Testnet Balance:</span>
+          <span class="balance-val">
+            <span id="bal-p2">---</span> <span class="sol-unit">SOL</span>
+            <button class="icon-btn" id="refresh-p2" title="Refresh balance" style="display:none;">🔄</button>
+          </span>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn-primary-p2" id="connect-p2">👻 Connect Phantom (P2)</button>
+          <button class="btn-subtle" id="airdrop-p2" title="Request 1 Testnet SOL from faucet">💧 Request 1 SOL</button>
+          <button class="btn-subtle" id="burner-p2" title="Instant 1-click testnet dev keypair">⚡ Quick Dev Key</button>
+          <button class="btn-subtle btn-remove" id="remove-p2" style="display:none;">Disconnect</button>
+        </div>
+
+        <div id="verified-info-p2" style="display:none; font-size:10px; color:#5cdba9;">
+          ✓ Cryptographically verified on Testnet
+        </div>
+        <section class="profile-history" aria-label="Player 2 wallet leaderboard and match history">
+          <div class="profile-history-header">
+            <span class="profile-history-title">This wallet · local record</span>
+            <button class="btn-subtle" id="clear-history-p2" style="font-size:9px;padding:3px 7px;">Clear</button>
+          </div>
+          <div class="profile-history-stats" id="history-stats-p2"></div>
+          <div class="profile-history-list" id="history-list-p2" aria-live="polite"></div>
+        </section>
+      </article>
+
+    </div>
+
+    <!-- PHANTOM MULTI-ACCOUNT TIP CALLOUT -->
+    <div class="phantom-helper" id="phantom-guide">
+      <strong>💡 How to register 2 accounts with Phantom on this local tab:</strong>
+      <ol>
+        <li>Click <strong>Connect Phantom (P1)</strong> to sign in with your first account.</li>
+        <li>To register Player 2: Open your Phantom extension, click your account avatar at the top, switch to <strong>Account 2</strong> (or click Add / Connect Wallet to create one), then click <strong>Connect Phantom (P2)</strong>.</li>
+        <li><em>Tip:</em> You can also click <strong>⚡ Quick Dev Key</strong> on either player for an instant 1-click testnet keypair!</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ARENA SECTION -->
+  <section class="arena-section" aria-label="Game Arena">
+    <div class="arena-controls">
+      <button class="btn-game-start" id="btn-start">▶ New Game</button>
+      <button class="btn-game-pause" id="btn-pause" disabled>Pause</button>
+    </div>
+
+    <div class="arena-grid">
+
+      <!-- PLAYER 1 BOARD -->
+      <div class="player-board-panel p1">
+        <div class="board-header">
+          <div class="board-player-title">
+            <span class="dot"></span>
+            <span id="label-board-p1">PLAYER 1</span>
+          </div>
+          <span class="board-wallet-badge" id="board-wallet-p1">No Wallet</span>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-pill">
+            <span class="stat-label">Score</span>
+            <span class="stat-value" id="score1">000000</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Lines</span>
+            <span class="stat-value" id="lines1">00</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Level</span>
+            <span class="stat-value" id="level1">1</span>
+          </div>
+        </div>
+
+        <div class="canvas-container">
+          <canvas id="board1" width="220" height="440"></canvas>
+          <div class="garbage-preview" id="incoming-p1" hidden aria-label="Incoming garbage rows for Player 1"></div>
+          <div class="board-overlay" id="overlay1">
+            <h3>READY?</h3>
+            <p>Press New Game to duel</p>
+          </div>
+        </div>
+
+        <div class="controls-hint">
+          <b>WASD</b>: Move &amp; Rotate · <b>S</b>: Soft Drop · <b>SPACE</b>: Hard Drop
+        </div>
+      </div>
+
+      <!-- VS -->
+      <div class="vs-divider">VS</div>
+
+      <!-- PLAYER 2 BOARD -->
+      <div class="player-board-panel p2">
+        <div class="board-header">
+          <div class="board-player-title">
+            <span class="dot"></span>
+            <span id="label-board-p2">PLAYER 2</span>
+          </div>
+          <span class="board-wallet-badge" id="board-wallet-p2">No Wallet</span>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-pill">
+            <span class="stat-label">Score</span>
+            <span class="stat-value" id="score2">000000</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Lines</span>
+            <span class="stat-value" id="lines2">00</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Level</span>
+            <span class="stat-value" id="level2">1</span>
+          </div>
+        </div>
+
+        <div class="canvas-container">
+          <canvas id="board2" width="220" height="440"></canvas>
+          <div class="garbage-preview" id="incoming-p2" hidden aria-label="Incoming garbage rows for Player 2"></div>
+          <div class="board-overlay" id="overlay2">
+            <h3>READY?</h3>
+            <p>Press New Game to duel</p>
+          </div>
+        </div>
+
+        <div class="controls-hint">
+          <b>ARROWS</b>: Move &amp; Rotate · <b>DOWN</b>: Soft Drop · <b>ENTER</b>: Hard Drop
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast-msg"></div><script>
+(() => {
+  'use strict';
+
+  if (location.protocol === 'file:') {
+    const el = document.getElementById('file-protocol-warning');
+    if (el) el.style.display = 'flex';
+  }
+
+  const $ = id => document.getElementById(id);
+  const shortAddr = addr => (!addr ? '' : addr.slice(0, 4) + '…' + addr.slice(-4));
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function showToast(text, type = 'info', ms = 4000) {
+    const t = $('toast-msg');
+    t.textContent = text;
+    t.className = 'toast show ' + type;
+    setTimeout(() => { t.className = 'toast'; }, ms);
+  }
+
+  const CLUSTERS = {
+    testnet: {
+      name: 'Solana Testnet',
+      rpc: 'https://api.testnet.solana.com',
+      explorer: '?cluster=testnet',
+    },
+    devnet: {
+      name: 'Solana Devnet',
+      rpc: 'https://api.devnet.solana.com',
+      explorer: '?cluster=devnet',
+    },
+    localnet: {
+      name: 'Localnet',
+      rpc: 'http://localhost:8899',
+      explorer: '?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899',
+    },
+  };
+
+  let activeClusterKey = localStorage.getItem('blockduel_cluster') || 'testnet';
+  $('cluster-select').value = activeClusterKey;
+  $('cluster-select').addEventListener('change', e => {
+    activeClusterKey = e.target.value;
+    localStorage.setItem('blockduel_cluster', activeClusterKey);
+    showToast(`Switched network to ${CLUSTERS[activeClusterKey].name}`, 'info');
+    refreshPlayerBalance(1);
+    refreshPlayerBalance(2);
+  });
+
+  function getRpcUrl() {
+    return CLUSTERS[activeClusterKey]?.rpc || 'https://api.testnet.solana.com';
+  }
+
+  async function callSolanaRpc(method, params = []) {
+    const payload = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method,
+      params,
+    };
+
+    try {
+      const res = await fetch(getRpcUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message || 'RPC Error');
+        return json.result;
+      }
+    } catch (err) {
+      console.warn('Direct RPC fetch failed, trying local proxy /api/solana-rpc:', err.message);
+    }
+
+    const proxyRes = await fetch(`/api/solana-rpc?cluster=${activeClusterKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!proxyRes.ok) throw new Error('RPC call failed via direct & proxy');
+    const proxyJson = await proxyRes.json();
+    if (proxyJson.error) throw new Error(proxyJson.error.message || 'Proxy RPC Error');
+    return proxyJson.result;
+  }
+
+  function getPhantomProvider() {
+    if ('phantom' in window && window.phantom?.solana?.isPhantom) {
+      return window.phantom.solana;
+    }
+    if (window.solana?.isPhantom) {
+      return window.solana;
+    }
+    return null;
+  }
+
+  const players = {
+    1: { reg: null, keypair: null },
+    2: { reg: null, keypair: null },
+  };
+
+  try {
+    const s1 = localStorage.getItem('blockduel_p1_reg');
+    if (s1) players[1].reg = JSON.parse(s1);
+    const s2 = localStorage.getItem('blockduel_p2_reg');
+    if (s2) players[2].reg = JSON.parse(s2);
+
+    const n1 = localStorage.getItem('blockduel_p1_name');
+    if (n1) $('name-p1').value = n1;
+    const n2 = localStorage.getItem('blockduel_p2_name');
+    if (n2) $('name-p2').value = n2;
+  } catch (e) {
+    console.error('Error loading saved registration:', e);
+  }
+
+  $('name-p1').addEventListener('input', e => {
+    localStorage.setItem('blockduel_p1_name', e.target.value.trim());
+    $('label-board-p1').textContent = (e.target.value.trim() || 'Player 1').toUpperCase();
+  });
+  $('name-p2').addEventListener('input', e => {
+    localStorage.setItem('blockduel_p2_name', e.target.value.trim());
+    $('label-board-p2').textContent = (e.target.value.trim() || 'Player 2').toUpperCase();
+  });
+
+  function updateWalletCardUI(p) {
+    const reg = players[p].reg;
+    const isReg = !!(reg && reg.address);
+    const statusPill = $(`status-pill-p${p}`);
+    const addrEl = $(`address-p${p}`);
+    const actionsEl = $(`actions-p${p}`);
+    const connectBtn = $(`connect-p${p}`);
+    const removeBtn = $(`remove-p${p}`);
+    const refreshBtn = $(`refresh-p${p}`);
+    const verifiedInfo = $(`verified-info-p${p}`);
+    const boardBadge = $(`board-wallet-p${p}`);
+
+    if (isReg) {
+      statusPill.textContent = 'Registered · Verified ✓';
+      statusPill.className = 'status-pill registered';
+      addrEl.textContent = shortAddr(reg.address) + ' (' + (reg.provider || 'Solana') + ')';
+      addrEl.title = reg.address;
+      actionsEl.style.display = 'flex';
+      connectBtn.textContent = 'Change Wallet';
+      removeBtn.style.display = 'inline-flex';
+      refreshBtn.style.display = 'inline-block';
+      verifiedInfo.style.display = 'block';
+      verifiedInfo.textContent = `✓ Signed on ${reg.cluster || 'testnet'}: ${shortAddr(reg.signature)}`;
+      boardBadge.textContent = shortAddr(reg.address);
+      boardBadge.title = reg.address;
+    } else {
+      statusPill.textContent = 'Not Registered';
+      statusPill.className = 'status-pill';
+      addrEl.textContent = 'Wallet: Not connected';
+      addrEl.title = '';
+      actionsEl.style.display = 'none';
+      connectBtn.textContent = `👻 Connect Phantom (P${p})`;
+      removeBtn.style.display = 'none';
+      refreshBtn.style.display = 'none';
+      verifiedInfo.style.display = 'none';
+      $(`bal-p${p}`).textContent = '---';
+      boardBadge.textContent = 'No Wallet';
+      boardBadge.title = '';
+    }
+    renderPlayerHistory(p);
+  }
+
+  async function refreshPlayerBalance(p) {
+    const reg = players[p].reg;
+    if (!reg?.address) return;
+    const balEl = $(`bal-p${p}`);
+    balEl.textContent = '...';
+    try {
+      const res = await callSolanaRpc('getBalance', [reg.address]);
+      const lamports = res?.value ?? res;
+      if (typeof lamports === 'number') {
+        const sol = (lamports / 1e9).toFixed(4);
+        balEl.textContent = sol;
+      } else {
+        balEl.textContent = '0.0000';
+      }
+    } catch (e) {
+      console.warn(`Balance check failed for P${p}:`, e.message);
+      balEl.textContent = 'Error';
+    }
+  }
+
+  [1, 2].forEach(p => {
+    $(`copy-p${p}`).addEventListener('click', () => {
+      const addr = players[p].reg?.address;
+      if (!addr) return;
+      navigator.clipboard.writeText(addr);
+      showToast(`Player ${p} address copied to clipboard!`, 'success');
+    });
+
+    $(`explorer-p${p}`).addEventListener('click', () => {
+      const addr = players[p].reg?.address;
+      if (!addr) return;
+      const expParam = CLUSTERS[activeClusterKey]?.explorer || '?cluster=testnet';
+      window.open(`https://explorer.solana.com/address/${addr}${expParam}`, '_blank');
+    });
+
+    $(`refresh-p${p}`).addEventListener('click', () => refreshPlayerBalance(p));
+
+    $(`remove-p${p}`).addEventListener('click', () => {
+      players[p].reg = null;
+      players[p].keypair = null;
+      localStorage.removeItem(`blockduel_p${p}_reg`);
+      updateWalletCardUI(p);
+      showToast(`Player ${p} wallet disconnected.`, 'info');
+    });
+  });
+
+  async function registerWithPhantom(p) {
+    const provider = getPhantomProvider();
+    if (!provider) {
+      showToast('Phantom wallet is not detected! Please install Phantom from phantom.app or open via http://localhost:3000.', 'error', 6000);
+      return;
+    }
+
+    const otherPlayer = p === 1 ? 2 : 1;
+    const otherAddr = players[otherPlayer].reg?.address;
+
+    try {
+      showToast(`Connecting Phantom for Player ${p}...`, 'info', 2000);
+      const conn = await provider.connect();
+      const pubkey = conn?.publicKey || provider.publicKey;
+      if (!pubkey) throw new Error('Could not get public key from Phantom.');
+      const address = typeof pubkey.toBase58 === 'function' ? pubkey.toBase58() : String(pubkey);
+
+      if (otherAddr && otherAddr === address) {
+        showToast(`⚠️ This account is already registered for Player ${otherPlayer}! Switch to Account 2 in Phantom, then click Connect.`, 'error', 7000);
+        return;
+      }
+
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), v => v.toString(16).padStart(2, '0')).join('');
+      const playerName = $(`name-p${p}`).value.trim() || `Player ${p}`;
+      const msgText = [
+        `BLOCK DUEL - 2-Player Local Tetris`,
+        `Account Registration for: ${playerName} (Player ${p})`,
+        `Wallet Address: ${address}`,
+        `Solana Cluster: ${CLUSTERS[activeClusterKey].name}`,
+        `Nonce: ${nonce}`,
+        `Timestamp: ${new Date().toISOString()}`,
+        `Notice: Free message sign-in for local duel testnet account registration. No transaction is broadcasted.`,
+      ].join('\n');
+
+      showToast(`Please approve the testnet registration message in Phantom...`, 'info', 4000);
+      const encodedMsg = new TextEncoder().encode(msgText);
+      const signRes = await provider.signMessage(encodedMsg, 'utf8');
+      const sigBytes = signRes?.signature || signRes;
+      if (!sigBytes || !sigBytes.length) throw new Error('No signature returned from Phantom.');
+
+      let binSig = '';
+      for (const b of sigBytes) binSig += String.fromCharCode(b);
+      const b64Sig = btoa(binSig);
+
+      let verified = true;
+      if (window.nacl?.sign?.detached?.verify && typeof pubkey.toBytes === 'function') {
+        try {
+          verified = window.nacl.sign.detached.verify(encodedMsg, sigBytes, pubkey.toBytes());
+        } catch (e) {
+          console.warn('nacl verify check:', e);
+        }
+      }
+
+      const regData = {
+        player: p,
+        name: playerName,
+        address,
+        signature: b64Sig,
+        message: msgText,
+        nonce,
+        cluster: activeClusterKey,
+        provider: 'Phantom',
+        registeredAt: Date.now(),
+        verified,
+      };
+
+      players[p].reg = regData;
+      localStorage.setItem(`blockduel_p${p}_reg`, JSON.stringify(regData));
+      updateWalletCardUI(p);
+      await refreshPlayerBalance(p);
+
+      showToast(`Player ${p} registered successfully on ${CLUSTERS[activeClusterKey].name}!`, 'success', 5000);
+    } catch (err) {
+      const isRejected = err?.code === 4001 || /reject|denied|cancel/i.test(err?.message || '');
+      showToast(isRejected ? 'Wallet request cancelled by user.' : (err.message || 'Registration failed.'), 'error');
+    }
+  }
+
+  $('connect-p1').addEventListener('click', () => registerWithPhantom(1));
+  $('connect-p2').addEventListener('click', () => registerWithPhantom(2));
+
+  const prov = getPhantomProvider();
+  if (prov && typeof prov.on === 'function') {
+    prov.on('accountChanged', newKey => {
+      if (!newKey) return;
+      const switchedAddr = typeof newKey.toBase58 === 'function' ? newKey.toBase58() : String(newKey);
+      if (players[1].reg?.address && !players[2].reg?.address && players[1].reg.address !== switchedAddr) {
+        showToast(`✨ Detected switched Phantom account (${shortAddr(switchedAddr)}). Click "Connect Phantom (P2)" to register!`, 'info', 6000);
+      }
+    });
+  }
+
+  function generateBurnerWallet(p) {
+    if (!window.solanaWeb3?.Keypair) {
+      showToast('Solana Web3 library is still loading, please wait 2 seconds...', 'info');
+      return;
+    }
+    try {
+      const kp = window.solanaWeb3.Keypair.generate();
+      const address = kp.publicKey.toBase58();
+      const playerName = $(`name-p${p}`).value.trim() || `Player ${p}`;
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), v => v.toString(16).padStart(2, '0')).join('');
+      const msgText = `BLOCK DUEL DEV KEY\nPlayer: ${playerName}\nWallet: ${address}\nNetwork: ${CLUSTERS[activeClusterKey].name}\nNonce: ${nonce}`;
+      const encoded = new TextEncoder().encode(msgText);
+
+      let b64Sig = 'dev-key-sig';
+      if (window.nacl?.sign?.detached) {
+        const sig = window.nacl.sign.detached(encoded, kp.secretKey);
+        let binSig = '';
+        for (const b of sig) binSig += String.fromCharCode(b);
+        b64Sig = btoa(binSig);
+      }
+
+      const regData = {
+        player: p,
+        name: playerName,
+        address,
+        signature: b64Sig,
+        message: msgText,
+        nonce,
+        cluster: activeClusterKey,
+        provider: 'Burner Dev Key',
+        registeredAt: Date.now(),
+        verified: true,
+      };
+
+      players[p].reg = regData;
+      players[p].keypair = kp;
+      localStorage.setItem(`blockduel_p${p}_reg`, JSON.stringify(regData));
+      updateWalletCardUI(p);
+      refreshPlayerBalance(p);
+
+      showToast(`Generated instant Testnet Keypair for Player ${p} (${shortAddr(address)})!`, 'success');
+    } catch (e) {
+      showToast('Failed to create dev keypair: ' + e.message, 'error');
+    }
+  }
+
+  $('burner-p1').addEventListener('click', () => generateBurnerWallet(1));
+  $('burner-p2').addEventListener('click', () => generateBurnerWallet(2));
+
+  async function requestAirdrop(p) {
+    const reg = players[p].reg;
+    if (!reg?.address) {
+      showToast(`Please connect Player ${p} wallet first!`, 'error');
+      return;
+    }
+
+    showToast(`Requesting 1 SOL from ${CLUSTERS[activeClusterKey].name} faucet...`, 'info', 5000);
+    try {
+      const sig = await callSolanaRpc('requestAirdrop', [reg.address, 1000000000]);
+      showToast(`Airdrop requested (tx: ${shortAddr(sig)}). Awaiting confirmation...`, 'info', 5000);
+      await sleep(3500);
+      await refreshPlayerBalance(p);
+      showToast(`✓ Airdrop confirmed! Balance updated.`, 'success');
+    } catch (err) {
+      console.warn('Airdrop RPC error:', err);
+      showToast(`Public faucet rate-limited. Opening official Solana Faucet web page...`, 'info', 6000);
+      const faucetUrl = `https://faucet.solana.com/?address=${encodeURIComponent(reg.address)}&cluster=${activeClusterKey}`;
+      window.open(faucetUrl, '_blank');
+    }
+  }
+
+  $('airdrop-p1').addEventListener('click', () => requestAirdrop(1));
+  $('airdrop-p2').addEventListener('click', () => requestAirdrop(2));
+
+  updateWalletCardUI(1);
+  updateWalletCardUI(2);
+  refreshPlayerBalance(1);
+  refreshPlayerBalance(2);
+
+  setInterval(() => {
+    refreshPlayerBalance(1);
+    refreshPlayerBalance(2);
+  }, 30000);  // =========================================================================
+  // TETRIS 2-PLAYER LOCAL GAME ENGINE
+  // =========================================================================
+  const W = 10, H = 20, S = 22;
+  const canvases = [$('board1'), $('board2')];
+  const contexts = canvases.map(c => c.getContext('2d'));
+
+  const SHAPES = [
+    [[1,1,1,1]],            // I
+    [[1,1],[1,1]],          // O
+    [[0,1,0],[1,1,1]],      // T
+    [[1,0,0],[1,1,1]],      // J
+    [[0,0,1],[1,1,1]],      // L
+    [[0,1,1],[1,1,0]],      // S
+    [[1,1,0],[0,1,1]],      // Z
+  ];
+  const COLORS = ['#38efdd','#ffd34f','#a776ff','#4b83ff','#ff9f43','#5cdda4','#ff529a'];
+
+  let games = [null, null];
+  let running = false;
+  let paused = false;
+  let frameId = 0;
+  let previousFrameTime = 0;
+  let nextGarbageAttackId = 1;
+  const softKeys = new Set();
+
+  function newPiece() {
+    const idx = Math.floor(Math.random() * SHAPES.length);
+    return {
+      shape: SHAPES[idx].map(row => row.slice()),
+      color: COLORS[idx],
+    };
+  }
+
+  function makeGame() {
+    const g = {
+      grid: Array.from({ length: H }, () => Array(W).fill(null)),
+      piece: null,
+      x: 0,
+      y: 0,
+      score: 0,
+      lines: 0,
+      level: 1,
+      lastDrop: 0,
+      soft: false,
+      over: false,
+      incomingGarbage: [],
+    };
+    spawn(g);
+    return g;
+  }
+
+  function collides(g, x, y, shape) {
+    for (let py = 0; py < shape.length; py++) {
+      for (let px = 0; px < shape[py].length; px++) {
+        if (shape[py][px]) {
+          const gx = x + px, gy = y + py;
+          if (gx < 0 || gx >= W || gy >= H || (gy >= 0 && g.grid[gy][gx])) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function spawn(g) {
+    g.piece = newPiece();
+    g.x = 3;
+    g.y = 0;
+    if (collides(g, g.x, g.y, g.piece.shape)) g.over = true;
+  }
+
+  function clearLines(g) {
+    let count = 0;
+    for (let y = H - 1; y >= 0; y--) {
+      if (g.grid[y].every(Boolean)) {
+        g.grid.splice(y, 1);
+        g.grid.unshift(Array(W).fill(null));
+        count++;
+        y++;
+      }
+    }
+    if (count) {
+      g.lines += count;
+      const pts = [0, 100, 300, 500, 800][count] * g.level;
+      g.score += pts;
+      g.level = 1 + Math.floor(g.lines / 10);
+    }
+    return count;
+  }
+
+  function queueGarbage(playerIndex, lineCount) {
+    const g = games[playerIndex];
+    if (!g || g.over) return;
+    g.incomingGarbage.push({
+      id: nextGarbageAttackId++,
+      holes: Array.from({ length: lineCount }, () => Math.floor(Math.random() * W)),
+      remainingMs: 3000,
+    });
+    renderGarbagePreview(playerIndex);
+  }
+
+  function renderGarbagePreview(playerIndex) {
+    const preview = $(`incoming-p${playerIndex + 1}`);
+    const attacks = games[playerIndex]?.incomingGarbage || [];
+    preview.replaceChildren();
+    preview.hidden = attacks.length === 0;
+
+    attacks.forEach(attack => {
+      const wave = document.createElement('div');
+      wave.className = 'garbage-wave';
+      wave.dataset.attackId = String(attack.id);
+      const countdown = document.createElement('span');
+      countdown.className = 'garbage-countdown';
+      countdown.title = 'Garbage lines rise when the countdown ends';
+      countdown.textContent = `${Math.max(0, attack.remainingMs / 1000).toFixed(1)}s`;
+      const rows = document.createElement('div');
+      rows.className = 'garbage-wave-rows';
+      attack.holes.forEach(hole => {
+        const row = document.createElement('div');
+        row.className = 'garbage-row';
+        for (let x = 0; x < W; x++) {
+          const cell = document.createElement('span');
+          cell.className = x === hole ? 'garbage-cell hole' : 'garbage-cell';
+          row.append(cell);
+        }
+        rows.append(row);
+      });
+      wave.append(countdown, rows);
+      preview.append(wave);
+    });
+  }
+
+  function insertGarbage(g, holes) {
+    for (const hole of holes) {
+      if (g.grid[0].some(Boolean)) {
+        g.over = true;
+        return;
+      }
+      g.grid.shift();
+      g.grid.push(Array.from({ length: W }, (_, x) => x === hole ? null : '#aa4659'));
+    }
+  }
+
+  function advanceIncomingGarbage(deltaMs) {
+    games.forEach((g, playerIndex) => {
+      if (!g || !g.incomingGarbage.length) return;
+      g.incomingGarbage.forEach(attack => { attack.remainingMs -= deltaMs; });
+      let changed = false;
+      while (g.incomingGarbage.length && g.incomingGarbage[0].remainingMs <= 0) {
+        const attack = g.incomingGarbage.shift();
+        insertGarbage(g, attack.holes);
+        changed = true;
+        if (g.over) break;
+      }
+      if (changed) renderGarbagePreview(playerIndex);
+      else {
+        const preview = $(`incoming-p${playerIndex + 1}`);
+        g.incomingGarbage.forEach(attack => {
+          const countdown = preview.querySelector(`[data-attack-id="${attack.id}"] .garbage-countdown`);
+          if (countdown) countdown.textContent = `${Math.max(0, attack.remainingMs / 1000).toFixed(1)}s`;
+        });
+      }
+    });
+  }
+
+  function lock(g, playerIndex) {
+    for (let py = 0; py < g.piece.shape.length; py++) {
+      for (let px = 0; px < g.piece.shape[py].length; px++) {
+        if (g.piece.shape[py][px]) {
+          const gy = g.y + py;
+          if (gy < 0) { g.over = true; return; }
+          g.grid[gy][g.x + px] = g.piece.color;
+        }
+      }
+    }
+    const cleared = clearLines(g);
+    if (cleared > 2) queueGarbage(1 - playerIndex, cleared);
+    spawn(g);
+  }
+
+  function move(g, dx, dy, playerIndex) {
+    if (!collides(g, g.x + dx, g.y + dy, g.piece.shape)) {
+      g.x += dx;
+      g.y += dy;
+      return true;
+    }
+    if (dy > 0) lock(g, playerIndex);
+    return false;
+  }
+
+  function rotate(g) {
+    const orig = g.piece.shape;
+    const rotated = orig[0].map((_, i) => orig.map(row => row[i]).reverse());
+    for (const kick of [0, -1, 1, -2, 2]) {
+      if (!collides(g, g.x + kick, g.y, rotated)) {
+        g.x += kick;
+        g.piece.shape = rotated;
+        return;
+      }
+    }
+  }
+
+  function drawCell(ctx, x, y, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x * S + 1, y * S + 1, S - 2, S - 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+    ctx.fillRect(x * S + 2, y * S + 2, S - 4, 3);
+  }
+
+  function draw(i) {
+    const ctx = contexts[i];
+    const g = games[i];
+    ctx.clearRect(0, 0, 220, 440);
+    ctx.fillStyle = '#060a12';
+    ctx.fillRect(0, 0, 220, 440);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    for (let x = 0; x <= W; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * S + 0.5, 0);
+      ctx.lineTo(x * S + 0.5, H * S);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= H; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * S + 0.5);
+      ctx.lineTo(W * S, y * S + 0.5);
+      ctx.stroke();
+    }
+
+    if (!g) return;
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (g.grid[y][x]) drawCell(ctx, x, y, g.grid[y][x]);
+      }
+    }
+
+    if (g.piece) {
+      for (let py = 0; py < g.piece.shape.length; py++) {
+        for (let px = 0; px < g.piece.shape[py].length; px++) {
+          if (g.piece.shape[py][px]) {
+            drawCell(ctx, g.x + px, g.y + py, g.piece.color);
+          }
+        }
+      }
+    }
+  }
+
+  function updateGameUI() {
+    games.forEach((g, i) => {
+      const n = i + 1;
+      if (!g) return;
+      $(`score${n}`).textContent = String(g.score).padStart(6, '0');
+      $(`lines${n}`).textContent = String(g.lines).padStart(2, '0');
+      $(`level${n}`).textContent = g.level;
+      draw(i);
+    });
+  }
+
+  function finishGame() {
+    running = false;
+    paused = false;
+    softKeys.clear();
+    games.forEach(g => { if (g) g.soft = false; });
+    cancelAnimationFrame(frameId);
+    $('btn-pause').disabled = true;
+
+    const p1Over = games[0].over;
+    const p2Over = games[1].over;
+    let winner = 0;
+    if (p1Over && !p2Over) winner = 2;
+    else if (!p1Over && p2Over) winner = 1;
+
+    const winnerName = winner ? ($(`name-p${winner}`).value.trim() || `Player ${winner}`) : 'Draw';
+
+    games.forEach((g, i) => {
+      const pNum = i + 1;
+      const overlay = $(`overlay${pNum}`);
+      if (winner === pNum) {
+        overlay.innerHTML = `<h3 style="color:var(--solana-green);">🏆 VICTORY!</h3><p>${winnerName} Wins!</p><span style="font-size:10px;color:#92a4bc;">Press New Game for rematch</span>`;
+      } else if (winner === 0) {
+        overlay.innerHTML = `<h3 style="color:#ffd34f;">DRAW!</h3><p>Both topped out</p><span style="font-size:10px;color:#92a4bc;">Press New Game for rematch</span>`;
+      } else {
+        overlay.innerHTML = `<h3 style="color:#ff5277;">GAME OVER</h3><p>Board topped out</p><span style="font-size:10px;color:#92a4bc;">${winnerName} won this duel</span>`;
+      }
+      overlay.hidden = false;
+    });
+
+    updateGameUI();
+    recordMatch(winner);
+  }
+
+  function gameLoop(now) {
+    if (!running || paused) return;
+
+    const deltaMs = previousFrameTime ? Math.min(now - previousFrameTime, 100) : 0;
+    previousFrameTime = now;
+    advanceIncomingGarbage(deltaMs);
+
+    for (let i = 0; i < games.length; i++) {
+      const g = games[i];
+      if (g.over) {
+        finishGame();
+        return;
+      }
+      const delay = g.soft ? 60 : Math.max(90, 800 - (g.level - 1) * 60);
+      if (now - g.lastDrop >= delay) {
+        move(g, 0, 1, i);
+        g.lastDrop = now;
+        if (g.over) {
+          finishGame();
+          return;
+        }
+      }
+    }
+
+    updateGameUI();
+    frameId = requestAnimationFrame(gameLoop);
+  }
+
+  function startGame() {
+    cancelAnimationFrame(frameId);
+    softKeys.clear();
+    games = [makeGame(), makeGame()];
+    running = true;
+    paused = false;
+
+    const now = performance.now();
+    previousFrameTime = now;
+    games.forEach(g => { g.lastDrop = now; });
+    renderGarbagePreview(0);
+    renderGarbagePreview(1);
+
+    $('btn-pause').disabled = false;
+    $('btn-pause').textContent = 'Pause';
+    $('overlay1').hidden = true;
+    $('overlay2').hidden = true;
+
+    updateGameUI();
+    frameId = requestAnimationFrame(gameLoop);
+    showToast('Match started! Control your boards.', 'info', 2500);
+  }
+
+  $('btn-start').addEventListener('click', startGame);
+
+  $('btn-pause').addEventListener('click', () => {
+    if (!running) return;
+    paused = !paused;
+    $('btn-pause').textContent = paused ? 'Resume' : 'Pause';
+    if (paused) {
+      softKeys.clear();
+      games.forEach(g => { if (g) g.soft = false; });
+      cancelAnimationFrame(frameId);
+    } else {
+      const now = performance.now();
+      previousFrameTime = now;
+      games.forEach(g => { g.lastDrop = now; });
+      frameId = requestAnimationFrame(gameLoop);
+    }
+  });
+
+  const map1 = { KeyA: 'left', KeyD: 'right', KeyW: 'rotate', KeyS: 'soft', Space: 'drop' };
+  const map2 = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rotate', ArrowDown: 'soft', Enter: 'drop' };
+
+  function handleKey(e, isDown) {
+    const act1 = map1[e.code];
+    const act2 = map2[e.code];
+    const action = act1 || act2;
+    if (!action) return;
+
+    if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','Space','Enter'].includes(e.code)) {
+      e.preventDefault();
+    }
+
+    const g = games[act1 ? 0 : 1];
+
+    if (action === 'soft') {
+      if (!isDown) {
+        softKeys.delete(e.code);
+        if (g) g.soft = false;
+        return;
+      }
+      if (running && !paused && g && !g.over && !softKeys.has(e.code)) {
+        softKeys.add(e.code);
+        g.soft = true;
+        move(g, 0, 1, act1 ? 0 : 1);
+        g.score++;
+        updateGameUI();
+      }
+      return;
+    }
+
+    if (!isDown || !running || paused || !g || g.over || e.repeat) return;
+
+    if (action === 'left') move(g, -1, 0, act1 ? 0 : 1);
+    if (action === 'right') move(g, 1, 0, act1 ? 0 : 1);
+    if (action === 'rotate') rotate(g);
+    if (action === 'drop') {
+      while (!collides(g, g.x, g.y + 1, g.piece.shape)) {
+        g.y++;
+        g.score += 2;
+      }
+      lock(g, act1 ? 0 : 1);
+      if (g.over) {
+        finishGame();
+        return;
+      }
+    }
+    updateGameUI();
+  }
+
+  addEventListener('keydown', e => handleKey(e, true));
+  addEventListener('keyup', e => handleKey(e, false));
+  addEventListener('blur', () => {
+    softKeys.clear();
+    games.forEach(g => { if (g) g.soft = false; });
+  });
+
+  for (let i = 0; i < 2; i++) {
+    contexts[i].fillStyle = '#060a12';
+    contexts[i].fillRect(0, 0, 220, 440);
+  }
+
+  function getWalletHistoryKey(address) {
+    return `blockduel_history_${address}`;
+  }
+
+  function readWalletHistory(address) {
+    if (!address) return [];
+    try {
+      const history = JSON.parse(localStorage.getItem(getWalletHistoryKey(address)) || '[]');
+      return Array.isArray(history) ? history : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderPlayerHistory(p) {
+    const address = players[p]?.reg?.address;
+    const history = readWalletHistory(address);
+    const statsEl = $(`history-stats-p${p}`);
+    const listEl = $(`history-list-p${p}`);
+    const wins = history.filter(match => match.result === 'win').length;
+    const losses = history.filter(match => match.result === 'loss').length;
+    const draws = history.filter(match => match.result === 'draw').length;
+    const best = history.reduce((score, match) => Math.max(score, Number(match.score) || 0), 0);
+
+    statsEl.replaceChildren();
+    [['Wins', wins], ['Losses', losses], ['Draws', draws], ['Best', best]].forEach(([label, value]) => {
+      const stat = document.createElement('div');
+      stat.className = 'profile-history-stat';
+      const number = document.createElement('strong');
+      number.textContent = String(value);
+      const caption = document.createElement('span');
+      caption.textContent = label;
+      stat.append(number, caption);
+      statsEl.append(stat);
+    });
+
+    listEl.replaceChildren();
+    if (!address) {
+      const empty = document.createElement('div');
+      empty.className = 'profile-history-empty';
+      empty.textContent = 'Connect a wallet to see its match history.';
+      listEl.append(empty);
+      return;
+    }
+    if (!history.length) {
+      const empty = document.createElement('div');
+      empty.className = 'profile-history-empty';
+      empty.textContent = 'No matches recorded for this wallet yet.';
+      listEl.append(empty);
+      return;
+    }
+
+    history.slice(0, 12).forEach(match => {
+      const row = document.createElement('div');
+      row.className = 'profile-match-row';
+      const result = document.createElement('span');
+      result.className = 'profile-match-result';
+      result.textContent = match.result;
+      result.style.color = match.result === 'win' ? 'var(--solana-green)' : match.result === 'loss' ? '#ff668c' : '#ffd34f';
+      const opponent = document.createElement('span');
+      opponent.className = 'profile-match-opponent';
+      opponent.textContent = `vs ${match.opponentName || 'Opponent'} · ${shortAddr(match.opponentAddress || '')} · ${match.score}–${match.opponentScore}`;
+      opponent.title = match.opponentAddress || '';
+      const time = document.createElement('span');
+      time.className = 'profile-match-time';
+      time.textContent = new Date(match.timestamp).toLocaleDateString();
+      time.title = `${new Date(match.timestamp).toLocaleString()} · ${match.network || 'Local'}`;
+      row.append(result, opponent, time);
+      listEl.append(row);
+    });
+  }
+
+  function recordMatch(winner) {
+    const timestamp = Date.now();
+    const network = CLUSTERS[activeClusterKey]?.name || 'Testnet';
+    [1, 2].forEach(p => {
+      const address = players[p].reg?.address;
+      if (!address) return;
+      const opponent = 3 - p;
+      const opponentAddress = players[opponent].reg?.address || '';
+      const history = readWalletHistory(address);
+      history.unshift({
+        timestamp,
+        result: winner === 0 ? 'draw' : winner === p ? 'win' : 'loss',
+        opponentName: $(`name-p${opponent}`).value.trim() || `Player ${opponent}`,
+        opponentAddress,
+        score: games[p - 1].score,
+        opponentScore: games[opponent - 1].score,
+        network,
+      });
+      localStorage.setItem(getWalletHistoryKey(address), JSON.stringify(history.slice(0, 50)));
+      renderPlayerHistory(p);
+    });
+  }
+
+  [1, 2].forEach(p => {
+    $(`clear-history-p${p}`).addEventListener('click', () => {
+      const address = players[p]?.reg?.address;
+      if (!address) return showToast('Connect a wallet before clearing its history.', 'info');
+      localStorage.removeItem(getWalletHistoryKey(address));
+      renderPlayerHistory(p);
+      showToast(`Player ${p} wallet history cleared.`, 'info');
+    });
+    renderPlayerHistory(p);
+  });
+
+})();
+</script>
+</body>
+</html>
