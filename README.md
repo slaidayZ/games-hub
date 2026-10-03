@@ -1,6 +1,9 @@
 # Games Hub — Block Duel
 
-[![Solana Devnet](https://img.shields.io/badge/Solana-Devnet-9945FF?logo=solana&logoColor=white)](https://solana.com/developers) [![Anchor](https://img.shields.io/badge/Anchor-0.31.1-blue)](https://www.anchor-lang.com/) [![Status](https://img.shields.io/badge/Status-Prototype-orange)](#current-status-and-safety)
+[![Solana Devnet](https://img.shields.io/badge/Solana-Devnet-9945FF?logo=solana&logoColor=white)](https://solana.com/developers)
+[![Anchor](https://img.shields.io/badge/Anchor-0.31.1-blue)](https://www.anchor-lang.com/)
+[![Status](https://img.shields.io/badge/Status-Prototype-orange)](#current-status-and-safety)
+[![Hackathon](https://img.shields.io/badge/Colosseum-2026-14F195)](https://colosseum.org)
 
 > A browser-based gaming hub prototype, starting with a two-player Tetris duel and optional SOL escrow on Solana Devnet.
 
@@ -8,28 +11,33 @@
 
 ---
 
-## Project Overview
+![Games Hub Screenshot](assets/project.jpg)
 
-Games Hub explores wallet-connected, head-to-head games on Solana. Its first game, **Block Duel**, is a local two-player Tetris match. Players can optionally stake 1 Devnet SOL each; the match escrow pays a 2 SOL pot to the reported winner.
+---
 
-**Network:** Solana Devnet · **Stage:** early prototype · **Founder:** slaidayZ
+## Submission to 2026 Solana National Hackathon
+
+| Name | Role | Contact |
+|------|------|---------|
+| slaidayZ | Founder | [GitHub](https://github.com/slaidayZ) |
+
+---
 
 ## Problem and Solution
 
 ### 1. Head-to-head games without shared stakes
-
 - **Problem:** Casual browser games rarely offer a simple way for two players to escrow equal stakes.
 - **Games Hub:** Players connect separate wallets and deposit equal amounts into a per-match Solana escrow.
 
 ### 2. Trusting the winner and handling payouts
-
 - **Problem:** An off-chain game result cannot directly move SOL from an escrow account.
 - **Games Hub:** The Anchor program stores each match and only permits the selected referee to settle it. For new Devnet matches, the local site server acts as referee and submits the payout.
 
 ### 3. Recovering from interrupted transactions
-
 - **Problem:** A browser can report a confirmation timeout even after a transaction has landed.
 - **Games Hub:** Players can recover a match from its on-chain match ID instead of immediately creating another wager.
+
+---
 
 ## Why Solana
 
@@ -37,6 +45,8 @@ Games Hub explores wallet-connected, head-to-head games on Solana. Its first gam
 - **Wallet-based deposits** — each player approves their stake through Phantom.
 - **Low-cost experimentation** — Devnet lets the project exercise the full wallet and escrow flow without real-value SOL.
 - **Rust and Anchor** — the wager rules and match accounts are implemented in an Anchor program.
+
+---
 
 ## Summary of Features
 
@@ -144,12 +154,6 @@ Before any mainnet use, the game result must be verified independently, key mana
 - [Anchor program source](programs/games_hub_bets/src/lib.rs)
 - [Anchor program guide](programs/games_hub_bets/README.md)
 - Live application and demo video: not published yet.
-
-## Team
-
-| Name | Role |
-| --- | --- |
-| slaidayZ | Founder |
 
 ## License
 
