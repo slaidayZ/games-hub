@@ -460,6 +460,28 @@
       margin-bottom: 18px;
       position: relative;
     }
+    .bet-section {
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid rgba(153, 69, 255, 0.4);
+      border-radius: 14px;
+      padding: 14px;
+      margin: 0 0 16px;
+    }
+    .bet-title { margin: 0 0 5px; font-size: 14px; color: #d9c1ff; }
+    .bet-copy { margin: 0 0 10px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+    .bet-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .bet-referee-input, .bet-match-input {
+      min-width: min(100%, 320px);
+      flex: 1;
+      background: #080d17;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .bet-status { color: var(--solana-green); font-size: 11px; margin-top: 9px; overflow-wrap: anywhere; }
+    .bet-section button:disabled { opacity: .45; cursor: not-allowed; }
     .arena-controls {
       display: flex;
       justify-content: center;
@@ -873,6 +895,25 @@
     </div>
   </section>
 
+  <section class="bet-section" aria-label="Optional Devnet wager">
+    <h2 class="bet-title">Optional 1 SOL wager · Devnet</h2>
+    <p class="bet-copy">Player 1 creates the match; Player 2 joins it. The site’s local Devnet sponsor wallet is the referee and automatically pays the winner after the game. Each player stakes 1 SOL; the winner receives 2 SOL. Players still need SOL for their deposits, and Player 1 also needs SOL for account rent and creation fees. Devnet testing only: the game result is reported by the browser and is not independently verified, so a dishonest player could request the wrong payout. Never use this automatic referee with real funds.</p>
+    <div class="bet-controls">
+      <input id="bet-referee" class="bet-referee-input" placeholder="Loading site referee wallet…" aria-label="Site referee wallet" readonly>
+      <button class="btn-subtle" id="bet-create">Create match · P1 stakes 1 SOL</button>
+      <input id="bet-match-id" class="bet-match-input" placeholder="Match ID appears here after creation; paste one to recover" aria-label="Wager match ID">
+      <button class="btn-subtle" id="bet-recover">Recover / check match</button>
+      <button class="btn-subtle" id="bet-copy" hidden>Copy ID</button>
+      <button class="btn-subtle" id="bet-join" hidden>Join match · P2 stakes 1 SOL</button>
+      <button class="btn-subtle" id="bet-cancel" hidden>Cancel waiting match</button>
+      <button class="btn-subtle" id="bet-settle" hidden>Retry automatic payout</button>
+      <button class="btn-subtle" id="bet-refund" hidden>Refund after 1 hour</button>
+    </div>
+    <div class="bet-status" id="bet-status" role="status" aria-live="polite">Switch the network selector to Devnet to enable wagers.</div>
+    <div class="bet-status" id="fee-sponsor-status" role="status" aria-live="polite">Checking the local Devnet fee sponsor…</div>
+    <button class="btn-subtle" id="fee-sponsor-copy" type="button">Copy fee sponsor address</button>
+  </section>
+
   <!-- ARENA SECTION -->
   <section class="arena-section" aria-label="Game Arena">
     <div class="arena-controls">
@@ -1069,6 +1110,8 @@
     2: { reg: null, keypair: null },
   };
 
+  let activeBet = null;
+
   try {
     const s1 = localStorage.getItem('blockduel_p1_reg');
     if (s1) players[1].reg = JSON.parse(s1);
@@ -1079,6 +1122,8 @@
     if (n1) $('name-p1').value = n1;
     const n2 = localStorage.getItem('blockduel_p2_name');
     if (n2) $('name-p2').value = n2;
+    const savedBet = localStorage.getItem('blockduel_active_sol_bet');
+    if (savedBet) activeBet = JSON.parse(savedBet);
   } catch (e) {
     console.error('Error loading saved registration:', e);
   }
@@ -1355,6 +1400,407 @@
     refreshPlayerBalance(1);
     refreshPlayerBalance(2);
   }, 30000);  // =========================================================================
+
+  // Devnet SOL wager integration. The Anchor program uses a trusted referee
+  // because the local browser game result is not independently verifiable.
+  const BET_PROGRAM_ID_TEXT = 'CGU9v9Zt1PJECyZDcXVJpgzjukxy2ejAXbN1bUbGE8tq';
+  const BET_PROGRAM_ID = new window.solanaWeb3.PublicKey(BET_PROGRAM_ID_TEXT);
+  const BET_STAKE_LAMPORTS = 1_000_000_000;
+  const BET_ACCOUNT_DISCRIMINATOR = '5908b5bdb30eb1f8';
+  const BET_DISCRIMINATORS = {
+    create_sol_match: 'e0dd950f64867b67',
+    join_sol_match: '94f957ffbb0c6a4c',
+    settle_sol_match: '6eeabd6067c3a114',
+    refund_sol_match: 'a945b6ef7ce81538',
+    cancel_sol_match: 'b7e976cae7f797f4',
+  };
+
+  function saveActiveBet() {
+    if (activeBet) localStorage.setItem('blockduel_active_sol_bet', JSON.stringify(activeBet));
+    else localStorage.removeItem('blockduel_active_sol_bet');
+    renderBetUI();
+  }
+
+  function renderBetUI() {
+    const onDevnet = activeClusterKey === 'devnet';
+    const status = $('bet-status');
+    const create = $('bet-create');
+    const join = $('bet-join');
+    const cancel = $('bet-cancel');
+    const settle = $('bet-settle');
+    const refund = $('bet-refund');
+    const copy = $('bet-copy');
+    const recover = $('bet-recover');
+    const betExists = !!activeBet;
+    const playerOneAddress = players[1].reg?.address;
+    const playerTwoAddress = players[2].reg?.address;
+    create.disabled = !onDevnet || betExists || !playerOneAddress || !playerTwoAddress || playerOneAddress === playerTwoAddress;
+    create.title = !onDevnet ? 'Switch to Devnet first.'
+      : betExists ? 'Finish, refund, cancel, or recover the saved match first.'
+        : !playerOneAddress ? 'Connect and register Player 1 first.'
+          : !playerTwoAddress ? 'Connect and register Player 2 first.'
+            : playerOneAddress === playerTwoAddress ? 'Player 1 and Player 2 need different wallets.'
+              : 'Create a Devnet match. Player 1 will deposit 1 SOL plus rent and fees.';
+    join.hidden = !activeBet || activeBet.status !== 'waiting';
+    join.disabled = !onDevnet || !players[2].reg?.address;
+    cancel.hidden = !activeBet || activeBet.status !== 'waiting';
+    cancel.disabled = !onDevnet;
+    settle.hidden = !activeBet || activeBet.status !== 'awaiting_settlement';
+    settle.disabled = !onDevnet;
+    refund.hidden = !activeBet || !['active', 'draw', 'awaiting_settlement'].includes(activeBet.status);
+    refund.disabled = !onDevnet;
+    copy.hidden = !activeBet?.matchId;
+    recover.hidden = !onDevnet;
+    recover.textContent = activeBet?.status === 'submitting' || activeBet?.status === 'unconfirmed'
+      ? 'Check / recover pending match'
+      : 'Recover / check match';
+    $('bet-match-id').value = activeBet?.matchId || '';
+    $('bet-referee').value = activeBet?.referee || $('bet-referee').value;
+
+    if (!onDevnet) {
+      status.textContent = 'Switch the network selector to Devnet to enable wagers. Devnet SOL has no monetary value.';
+    } else if (!betExists) {
+      if (!playerOneAddress) status.textContent = 'Connect and register Player 1 to enable Create match.';
+      else if (!playerTwoAddress) status.textContent = 'Connect and register Player 2 to enable Create match.';
+      else if (playerOneAddress === playerTwoAddress) status.textContent = 'Player 1 and Player 2 must be different wallets to create a match.';
+      else status.textContent = 'Ready to create a Devnet match. Player 1 needs 1 SOL plus account rent and transaction fees; the site sponsor is the automatic referee.';
+    } else if (activeBet.status === 'submitting' || activeBet.status === 'unconfirmed') {
+      status.textContent = `Transaction sent or confirmation pending. Do not create another wager. Check / recover match ID ${activeBet.matchId}.`;
+    } else if (activeBet.status === 'waiting') {
+      status.textContent = 'Match created. Switch Phantom to Player 2 and join this match before starting Tetris.';
+    } else if (activeBet.status === 'active') {
+      status.textContent = 'Both 1 SOL stakes are escrowed. Play Tetris; the site referee will automatically pay the browser-reported winner. A draw or unresolved match can be refunded after 1 hour.';
+    } else if (activeBet.status === 'draw') {
+      status.textContent = 'The game ended in a draw. Either player can claim a refund after the one-hour timeout.';
+    } else if (activeBet.status === 'awaiting_settlement') {
+      status.textContent = `Tetris winner: ${shortAddr(activeBet.winnerAddress)}. The site referee is submitting the payout automatically; use Retry automatic payout if needed.`;
+    }
+  }
+
+  function getBetConnection() {
+    if (!window.solanaWeb3?.Connection) throw new Error('Solana Web3 is still loading. Refresh and try again.');
+    const endpoint = new URL('/api/solana-rpc?cluster=devnet', location.origin).toString();
+    return new window.solanaWeb3.Connection(endpoint, 'confirmed');
+  }
+
+  function betPdas(matchId) {
+    const key = new window.solanaWeb3.PublicKey(matchId);
+    const [state] = window.solanaWeb3.PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode('sol_match'), key.toBuffer()], BET_PROGRAM_ID,
+    );
+    const [escrow] = window.solanaWeb3.PublicKey.findProgramAddressSync(
+      [new TextEncoder().encode('sol_escrow'), key.toBuffer()], BET_PROGRAM_ID,
+    );
+    return { key, state, escrow };
+  }
+
+  function betInstruction(method, keys, pubkeyArgs = [], u64Args = []) {
+    const hex = BET_DISCRIMINATORS[method];
+    if (!hex) throw new Error(`Unknown wager instruction: ${method}`);
+    const parts = [Uint8Array.from(hex.match(/.{2}/g), byte => parseInt(byte, 16))];
+    pubkeyArgs.forEach(key => parts.push(new window.solanaWeb3.PublicKey(key).toBytes()));
+    u64Args.forEach(value => {
+      const bytes = new Uint8Array(8);
+      let remaining = BigInt(value);
+      for (let i = 0; i < 8; i++) { bytes[i] = Number(remaining & 255n); remaining >>= 8n; }
+      parts.push(bytes);
+    });
+    const data = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let offset = 0;
+    parts.forEach(part => { data.set(part, offset); offset += part.length; });
+    const BufferType = BET_PROGRAM_ID.toBuffer().constructor;
+    return new window.solanaWeb3.TransactionInstruction({
+      programId: BET_PROGRAM_ID,
+      keys,
+      data: BufferType.from(data),
+    });
+  }
+
+  async function submitBetTransaction(expectedSignerAddress, playerIndex, instruction) {
+    if (activeClusterKey !== 'devnet') throw new Error('Wagers are enabled only on Devnet.');
+    const web3 = window.solanaWeb3;
+    const expected = new web3.PublicKey(expectedSignerAddress);
+    const keypair = playerIndex ? players[playerIndex].keypair : null;
+    const provider = getPhantomProvider();
+    if (!keypair && !provider) throw new Error('Connect Phantom to sign this Devnet transaction.');
+    if (keypair && !keypair.publicKey.equals(expected)) throw new Error(`Player ${playerIndex} dev key does not match this wager.`);
+
+    if (!keypair && !provider.publicKey) await provider.connect();
+    const activeWallet = keypair?.publicKey || provider.publicKey;
+    if (!activeWallet || !new web3.PublicKey(activeWallet.toString()).equals(expected)) {
+      throw new Error(`Switch Phantom to ${shortAddr(expected.toBase58())} before signing.`);
+    }
+
+    const connection = getBetConnection();
+    const latest = await connection.getLatestBlockhash('confirmed');
+    const transaction = new web3.Transaction({
+      feePayer: expected,
+      recentBlockhash: latest.blockhash,
+    }).add(instruction);
+    let signed;
+    if (keypair) {
+      transaction.sign(keypair);
+      signed = transaction;
+    } else {
+      signed = await provider.signTransaction(transaction);
+    }
+    const signature = await connection.sendRawTransaction(signed.serialize(), {
+      preflightCommitment: 'confirmed',
+      maxRetries: 3,
+    });
+    await waitForBetConfirmation(signature, latest.lastValidBlockHeight);
+    if (playerIndex) await refreshPlayerBalance(playerIndex);
+    return signature;
+  }
+
+  async function waitForBetConfirmation(signature, lastValidBlockHeight) {
+    const deadline = Date.now() + 60000;
+    let lastRpcError = '';
+    while (Date.now() < deadline) {
+      try {
+        const response = await callSolanaRpc('getSignatureStatuses', [[signature], { searchTransactionHistory: true }]);
+        const status = response?.value?.[0];
+        if (status?.err) throw new Error(`Transaction failed on chain: ${JSON.stringify(status.err)}`);
+        if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized' || status.confirmations === null)) return;
+        if (!status && Number.isFinite(lastValidBlockHeight)) {
+          const blockHeight = await callSolanaRpc('getBlockHeight', [{ commitment: 'confirmed' }]);
+          if (blockHeight > lastValidBlockHeight) {
+            throw new Error(`The signature was not found before its blockhash expired. Check / recover match ID before retrying: ${signature}`);
+          }
+        }
+      } catch (error) {
+        if (/Transaction failed on chain|signature was not found/i.test(error.message || '')) throw error;
+        lastRpcError = error.message || String(error);
+      }
+      await sleep(1200);
+    }
+    throw new Error(`Transaction was sent but confirmation is still pending. Do not submit it again; check / recover the match. ${lastRpcError}`);
+  }
+
+  function meta(pubkey, isWritable = false, isSigner = false) {
+    return { pubkey: new window.solanaWeb3.PublicKey(pubkey), isWritable, isSigner };
+  }
+
+  async function createSolBet() {
+    try {
+      if (activeClusterKey !== 'devnet') throw new Error('Switch the network selector to Devnet first.');
+      const p1 = players[1].reg?.address;
+      const p2 = players[2].reg?.address;
+      if (!p1 || !p2) throw new Error('Connect both player wallets first.');
+      if (p1 === p2) throw new Error('Player 1 and Player 2 must use different wallets.');
+      const sponsorResponse = await fetch('/api/fee-sponsor');
+      const sponsorInfo = await sponsorResponse.json();
+      if (!sponsorResponse.ok || sponsorInfo.error) throw new Error(sponsorInfo.error || 'The site referee wallet is unavailable. Restart the site and try again.');
+      $('bet-referee').value = sponsorInfo.address;
+      const referee = new window.solanaWeb3.PublicKey(sponsorInfo.address).toBase58();
+      if (referee === p1 || referee === p2) throw new Error('The referee must be a separate wallet, not either player.');
+      if (!window.confirm('Create a Devnet wager? The site sponsor will be the referee and will automatically pay the browser-reported winner. Player 1 deposits 1 SOL plus account rent and transaction fees. Player 2 must later deposit 1 SOL. Devnet SOL has no monetary value.')) return;
+
+      const matchId = window.solanaWeb3.Keypair.generate().publicKey;
+      const { key, state, escrow } = betPdas(matchId.toBase58());
+      const ix = betInstruction('create_sol_match', [
+        meta(state, true), meta(escrow, true), meta(referee), meta(p1, true, true),
+        meta(window.solanaWeb3.SystemProgram.programId),
+      ], [key], [BET_STAKE_LAMPORTS]);
+      activeBet = { matchId: key.toBase58(), playerOne: p1, referee, status: 'submitting', createdAt: Date.now() };
+      saveActiveBet();
+      showToast('Approve Player 1’s 1 SOL Devnet stake in Phantom...', 'info', 5000);
+      let signature;
+      try {
+        signature = await submitBetTransaction(p1, 1, ix);
+        activeBet.status = 'waiting';
+        saveActiveBet();
+      } catch (error) {
+        activeBet.status = 'unconfirmed';
+        saveActiveBet();
+        throw error;
+      }
+      showToast(`Match created (${shortAddr(signature)}). Switch Phantom to Player 2 to join.`, 'success', 7000);
+    } catch (error) {
+      showToast(error.message || 'Could not create the wager.', 'error', 7000);
+    }
+  }
+
+  async function joinSolBet() {
+    try {
+      if (!activeBet || activeBet.status !== 'waiting') throw new Error('There is no open wager to join.');
+      if (activeClusterKey !== 'devnet') throw new Error('Switch the network selector to Devnet first.');
+      const p2 = players[2].reg?.address;
+      if (players[1].reg?.address !== activeBet.playerOne) throw new Error('Reconnect Player 1’s original wallet before joining this wager.');
+      if (!p2) throw new Error('Connect Player 2 wallet first.');
+      if (p2 === activeBet.playerOne) throw new Error('Player 2 must use a different wallet from Player 1.');
+      if (!window.confirm('Join this Devnet wager? Player 2 deposits exactly 1 SOL plus the transaction fee.')) return;
+
+      const { key, state, escrow } = betPdas(activeBet.matchId);
+      const ix = betInstruction('join_sol_match', [
+        meta(state, true), meta(escrow, true), meta(p2, true, true),
+        meta(window.solanaWeb3.SystemProgram.programId),
+      ], [key]);
+      showToast('Approve Player 2’s 1 SOL Devnet stake in Phantom...', 'info', 5000);
+      const signature = await submitBetTransaction(p2, 2, ix);
+      activeBet.playerTwo = p2;
+      activeBet.status = 'active';
+      activeBet.joinedAt = Date.now();
+      saveActiveBet();
+      showToast(`Both stakes are escrowed (${shortAddr(signature)}). Start Tetris when ready.`, 'success', 7000);
+    } catch (error) {
+      showToast(error.message || 'Could not join the wager.', 'error', 7000);
+    }
+  }
+
+  async function cancelSolBet() {
+    try {
+      if (!activeBet || activeBet.status !== 'waiting') throw new Error('Only an open, unjoined wager can be cancelled.');
+      if (!window.confirm('Cancel this open match and return Player 1’s escrowed SOL?')) return;
+      const { state, escrow } = betPdas(activeBet.matchId);
+      const p1 = new window.solanaWeb3.PublicKey(activeBet.playerOne);
+      const ix = betInstruction('cancel_sol_match', [meta(state, true), meta(escrow, true), meta(p1, true, true)]);
+      await submitBetTransaction(p1, 1, ix);
+      activeBet = null;
+      saveActiveBet();
+      showToast('Open wager cancelled; Player 1’s stake and account rent were returned.', 'success', 6000);
+    } catch (error) {
+      showToast(error.message || 'Could not cancel the wager.', 'error', 7000);
+    }
+  }
+
+  async function settleSolBet() {
+    try {
+      if (!activeBet || activeBet.status !== 'awaiting_settlement' || !activeBet.winnerAddress) throw new Error('Finish a wagered game before settlement.');
+      if (activeClusterKey !== 'devnet') throw new Error('Automatic settlement is enabled only on Devnet.');
+      if (activeBet.referee !== $('bet-referee').value.trim()) throw new Error('This match has a different on-chain referee; automatic payout is available only for matches created with the site referee.');
+      showToast('The site referee is paying the winner from escrow…', 'info', 5000);
+      const response = await fetch('/api/fee-sponsor/settle', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ matchId: activeBet.matchId, winnerAddress: activeBet.winnerAddress }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'The site referee could not settle the wager.');
+      activeBet = null;
+      saveActiveBet();
+      showToast(`Winner paid 2 SOL (${shortAddr(result.signature)}).`, 'success', 7000);
+      refreshPlayerBalance(1); refreshPlayerBalance(2);
+    } catch (error) {
+      showToast(error.message || 'Could not settle the wager.', 'error', 7000);
+    }
+  }
+
+  async function refundSolBet() {
+    try {
+      if (!activeBet || !['active', 'draw', 'awaiting_settlement'].includes(activeBet.status)) throw new Error('There is no refundable match.');
+      if (!window.confirm('Request a refund? The contract allows refunds only after one hour without settlement.')) return;
+      const { state, escrow } = betPdas(activeBet.matchId);
+      const p1 = new window.solanaWeb3.PublicKey(activeBet.playerOne);
+      const p2 = new window.solanaWeb3.PublicKey(activeBet.playerTwo);
+      const ix = betInstruction('refund_sol_match', [meta(state, true), meta(escrow, true), meta(p1, true), meta(p2, true)]);
+      await submitBetTransaction(p1.toBase58(), 1, ix);
+      activeBet = null;
+      saveActiveBet();
+      showToast('Refund complete: each player received 1 SOL.', 'success', 6000);
+      refreshPlayerBalance(1); refreshPlayerBalance(2);
+    } catch (error) {
+      showToast(error.message || 'Could not refund the wager.', 'error', 7000);
+    }
+  }
+
+  async function recoverSolBet() {
+    try {
+      if (activeClusterKey !== 'devnet') throw new Error('Switch the network selector to Devnet first.');
+      const matchId = $('bet-match-id').value.trim() || activeBet?.matchId;
+      if (!matchId) throw new Error('Paste the match ID to check or recover it.');
+      const { key, state } = betPdas(matchId);
+      const response = await callSolanaRpc('getAccountInfo', [state.toBase58(), { encoding: 'base64', commitment: 'confirmed' }]);
+      const account = response?.value;
+      if (!account) {
+        const matchesSavedBet = activeBet?.matchId === key.toBase58();
+        const pendingSubmission = ['submitting', 'unconfirmed'].includes(activeBet?.status);
+        if (matchesSavedBet && !pendingSubmission) {
+          activeBet = null;
+          saveActiveBet();
+          $('bet-match-id').value = '';
+          showToast('That saved match is closed on-chain. Its local record was cleared; Create match is available again.', 'info', 7000);
+          return;
+        }
+        throw new Error('No match account found for that ID yet. Wait a few seconds and check again.');
+      }
+      if (account.owner !== BET_PROGRAM_ID_TEXT) throw new Error('That address is not owned by the Games Hub wager program.');
+      const binary = atob(account.data?.[0] || '');
+      const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+      const expectedDiscriminator = Uint8Array.from(BET_ACCOUNT_DISCRIMINATOR.match(/.{2}/g), byte => parseInt(byte, 16));
+      if (bytes.length < 187 || expectedDiscriminator.some((byte, i) => bytes[i] !== byte)) {
+        throw new Error('The on-chain account is not a readable Games Hub match.');
+      }
+      const readKey = (offset) => new window.solanaWeb3.PublicKey(bytes.slice(offset, offset + 32)).toBase58();
+      const stateCode = bytes[184];
+      const statusByCode = { 0: 'waiting', 1: 'active', 2: 'settled', 3: 'cancelled' };
+      const status = statusByCode[stateCode];
+      if (!status) throw new Error('The match has an unknown on-chain status.');
+      if (status === 'settled' || status === 'cancelled') {
+        activeBet = null;
+        saveActiveBet();
+        $('bet-match-id').value = '';
+        showToast(`This match is already ${status}.`, 'info', 6000);
+        return;
+      }
+      const playerTwo = readKey(72);
+      activeBet = {
+        matchId: key.toBase58(),
+        playerOne: readKey(40),
+        playerTwo: playerTwo === '11111111111111111111111111111111' ? '' : playerTwo,
+        referee: readKey(104),
+        status,
+        recoveredAt: Date.now(),
+      };
+      if (status === 'active') activeBet.joinedAt = Date.now();
+      saveActiveBet();
+      showToast(`Recovered on-chain match (${status}). No new stake was submitted.`, 'success', 6000);
+    } catch (error) {
+      showToast(error.message || 'Could not recover the wager.', 'error', 7000);
+    }
+  }
+
+  $('bet-create').addEventListener('click', createSolBet);
+  $('bet-join').addEventListener('click', joinSolBet);
+  $('bet-cancel').addEventListener('click', cancelSolBet);
+  $('bet-settle').addEventListener('click', settleSolBet);
+  $('bet-refund').addEventListener('click', refundSolBet);
+  $('bet-recover').addEventListener('click', recoverSolBet);
+  let feeSponsorAddress = '';
+  async function refreshFeeSponsorStatus() {
+    const status = $('fee-sponsor-status');
+    try {
+      const response = await fetch('/api/fee-sponsor');
+      const info = await response.json();
+      if (!response.ok || info.error) throw new Error(info.error || 'Unavailable');
+      feeSponsorAddress = info.address;
+      $('bet-referee').value = info.address;
+      $('fee-sponsor-copy').disabled = false;
+      const balance = Number.isFinite(info.balanceLamports)
+        ? `${(info.balanceLamports / 1_000_000_000).toFixed(5)} SOL`
+        : 'balance temporarily unavailable';
+      status.textContent = `Local Devnet referee: ${shortAddr(info.address)} · ${balance}. Fund this address with Devnet SOL for automatic payouts.`;
+    } catch (error) {
+      feeSponsorAddress = '';
+      $('fee-sponsor-copy').disabled = true;
+      status.textContent = `Local Devnet fee sponsor unavailable: ${error.message}`;
+    }
+  }
+  $('fee-sponsor-copy').addEventListener('click', async () => {
+    if (!feeSponsorAddress) return;
+    await navigator.clipboard.writeText(feeSponsorAddress);
+    showToast('Fee sponsor address copied.', 'success');
+  });
+  refreshFeeSponsorStatus();
+  $('bet-copy').addEventListener('click', async () => {
+    if (!activeBet?.matchId) return;
+    await navigator.clipboard.writeText(activeBet.matchId);
+    showToast('Wager match ID copied.', 'success');
+  });
+  $('cluster-select').addEventListener('change', renderBetUI);
+  renderBetUI();
+
+  // =========================================================================
   // TETRIS 2-PLAYER LOCAL GAME ENGINE
   // =========================================================================
   const W = 10, H = 20, S = 22;
@@ -1645,6 +2091,25 @@
 
     updateGameUI();
     recordMatch(winner);
+    if (activeBet?.status === 'active') {
+      if (winner === 0) {
+        activeBet.status = 'draw';
+        activeBet.winnerAddress = null;
+      } else {
+        const p1Address = players[1].reg?.address;
+        const p2Address = players[2].reg?.address;
+        const expectedOne = activeBet.playerOne;
+        const expectedTwo = activeBet.playerTwo;
+        if (p1Address !== expectedOne || p2Address !== expectedTwo) {
+          showToast('Wager wallet assignments changed. Verify both registered wallets before settlement.', 'error', 7000);
+        } else {
+          activeBet.winnerAddress = players[winner].reg.address;
+          activeBet.status = 'awaiting_settlement';
+        }
+      }
+      saveActiveBet();
+      if (activeBet?.status === 'awaiting_settlement') settleSolBet();
+    }
   }
 
   function gameLoop(now) {
@@ -1676,6 +2141,14 @@
   }
 
   function startGame() {
+    if (activeBet?.status === 'waiting') {
+      showToast('Player 2 must join the wager before starting this match.', 'error', 5000);
+      return;
+    }
+    if (activeBet && activeBet.status !== 'active') {
+      showToast('Settle or refund the previous wager before starting another game.', 'error', 5000);
+      return;
+    }
     cancelAnimationFrame(frameId);
     softKeys.clear();
     games = [makeGame(), makeGame()];

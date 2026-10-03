@@ -1,4 +1,6 @@
 node_modules/
+target/
+.anchor/
 .env
 .env.*
 .DS_Store
@@ -6,3 +8,4 @@ node_modules/
 wallet.json
 id.json
 devnet-wallet.json
+server-fee-payer.json

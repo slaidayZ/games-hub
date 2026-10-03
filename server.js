@@ -5,11 +5,23 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
+const { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } = require('@solana/web3.js');
 
 const HOST = process.env.HOST || '::';
 const PORT = Number(process.env.PORT || 3000);
 const FILE = path.join(__dirname, 'index.html');
 const WEB3_LIB = path.join(__dirname, 'node_modules/@solana/web3.js/lib/index.iife.min.js');
+const FEE_PAYER_FILE = process.env.SERVER_FEE_PAYER_KEYPAIR || path.join(__dirname, 'server-fee-payer.json');
+const BET_PROGRAM_ID = 'CGU9v9Zt1PJECyZDcXVJpgzjukxy2ejAXbN1bUbGE8tq';
+const SETTLE_DISCRIMINATOR = Buffer.from('6eeabd6067c3a114', 'hex');
+const MATCH_DISCRIMINATOR = Buffer.from('5908b5bdb30eb1f8', 'hex');
+const DEVNET = 'https://api.devnet.solana.com';
+const feePayer = loadFeePayer();
+const feeConnection = new Connection(DEVNET, 'confirmed');
+const sponsoredRequests = new Map();
+const settlingMatches = new Map();
+let feeBalanceCache = null;
+let feeBalanceCacheExpiresAt = 0;
 
 const waiting = [];
 const rooms = new Map();
@@ -23,6 +35,146 @@ function sendJson(res, data, status = 200) {
     'cache-control': 'no-store',
   });
   res.end(JSON.stringify(data));
+}
+
+function loadFeePayer() {
+  try {
+    const secret = JSON.parse(fs.readFileSync(FEE_PAYER_FILE, 'utf8'));
+    return Keypair.fromSecretKey(Uint8Array.from(secret));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw new Error(`Could not load server fee payer keypair: ${error.message}`);
+    const keypair = Keypair.generate();
+    fs.writeFileSync(FEE_PAYER_FILE, JSON.stringify(Array.from(keypair.secretKey)), { mode: 0o600, flag: 'wx' });
+    console.log(`Generated Devnet fee sponsor: ${keypair.publicKey.toBase58()}`);
+    console.log(`Fund it with Devnet SOL to sponsor settlement transaction fees. Key file: ${FEE_PAYER_FILE}`);
+    return keypair;
+  }
+}
+
+async function feeSponsorStatus(req, res) {
+  try {
+    if (feeBalanceCacheExpiresAt < Date.now()) {
+      const rpcResponse = await fetch(DEVNET, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'getBalance',
+          params: [feePayer.publicKey.toBase58(), { commitment: 'confirmed' }],
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const rpcResult = await rpcResponse.json();
+      if (!rpcResponse.ok || rpcResult.error) throw new Error(rpcResult.error?.message || `Devnet RPC returned HTTP ${rpcResponse.status}`);
+      feeBalanceCache = rpcResult.result.value;
+      feeBalanceCacheExpiresAt = Date.now() + 15000;
+    }
+    return sendJson(res, {
+      address: feePayer.publicKey.toBase58(),
+      balanceLamports: feeBalanceCache,
+    });
+  } catch (error) {
+    feeBalanceCacheExpiresAt = Date.now() + 10000;
+    console.warn(`Devnet fee sponsor balance unavailable: ${error.message}`);
+    return sendJson(res, {
+      address: feePayer.publicKey.toBase58(),
+      balanceLamports: null,
+      balanceError: 'Devnet RPC is rate-limited or temporarily unavailable.',
+    });
+  }
+}
+
+function allowSponsoredRequest(req) {
+  const now = Date.now();
+  const ip = req.socket.remoteAddress || 'unknown';
+  const entries = (sponsoredRequests.get(ip) || []).filter(time => now - time < 60000);
+  if (entries.length >= 10) return false;
+  entries.push(now);
+  sponsoredRequests.set(ip, entries);
+  return true;
+}
+
+function isSameOriginRequest(req) {
+  try {
+    const origin = new URL(req.headers.origin || '');
+    return origin.host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+async function settleFromServer(matchIdText, winnerText) {
+  const matchId = new PublicKey(matchIdText);
+  const winner = new PublicKey(winnerText);
+  const [matchState] = PublicKey.findProgramAddressSync([Buffer.from('sol_match'), matchId.toBuffer()], new PublicKey(BET_PROGRAM_ID));
+  const [escrow] = PublicKey.findProgramAddressSync([Buffer.from('sol_escrow'), matchId.toBuffer()], new PublicKey(BET_PROGRAM_ID));
+  const account = await feeConnection.getAccountInfo(matchState, 'confirmed');
+  if (!account || !account.owner.equals(new PublicKey(BET_PROGRAM_ID))) throw new Error('No Games Hub wager found for this match ID.');
+  const data = account.data;
+  if (data.length < 187 || !data.subarray(0, 8).equals(MATCH_DISCRIMINATOR)) throw new Error('The on-chain match account has an invalid layout.');
+  const readKey = offset => new PublicKey(data.subarray(offset, offset + 32));
+  const onChainMatchId = readKey(8);
+  const playerOne = readKey(40);
+  const playerTwo = readKey(72);
+  const referee = readKey(104);
+  if (!onChainMatchId.equals(matchId)) throw new Error('Match ID does not match the on-chain account.');
+  if (!referee.equals(feePayer.publicKey)) throw new Error('This match was created with a different referee; the site sponsor cannot settle it.');
+  if (data[184] !== 1) throw new Error('This match is not active or has already been settled.');
+  if (!winner.equals(playerOne) && !winner.equals(playerTwo)) throw new Error('Winner must be one of the two on-chain players.');
+
+  const instruction = new TransactionInstruction({
+    programId: new PublicKey(BET_PROGRAM_ID),
+    keys: [
+      { pubkey: matchState, isSigner: false, isWritable: true },
+      { pubkey: escrow, isSigner: false, isWritable: true },
+      { pubkey: winner, isSigner: false, isWritable: true },
+      { pubkey: playerOne, isSigner: false, isWritable: true },
+      { pubkey: feePayer.publicKey, isSigner: true, isWritable: false },
+    ],
+    data: Buffer.concat([SETTLE_DISCRIMINATOR, winner.toBuffer()]),
+  });
+  const latest = await feeConnection.getLatestBlockhash('confirmed');
+  const transaction = new Transaction({
+    feePayer: feePayer.publicKey,
+    recentBlockhash: latest.blockhash,
+  }).add(instruction);
+  transaction.sign(feePayer);
+  const signature = await feeConnection.sendRawTransaction(transaction.serialize(), { preflightCommitment: 'confirmed', maxRetries: 3 });
+  const confirmation = await feeConnection.confirmTransaction({ signature, ...latest }, 'confirmed');
+  if (confirmation.value.err) throw new Error(`Settlement failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+  return signature;
+}
+
+function sponsorSettlement(req, res) {
+  if (!isSameOriginRequest(req)) return sendJson(res, { error: 'Settlement requests must come from this site.' }, 403);
+  if (!allowSponsoredRequest(req)) return sendJson(res, { error: 'Settlement rate limit reached. Try again in a minute.' }, 429);
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk;
+    if (body.length > 20000) req.destroy();
+  });
+  req.on('end', async () => {
+    try {
+      const payload = JSON.parse(body);
+      if (typeof payload.matchId !== 'string' || typeof payload.winnerAddress !== 'string') {
+        return sendJson(res, { error: 'A match ID and winner address are required.' }, 400);
+      }
+      const matchId = new PublicKey(payload.matchId).toBase58();
+      if (settlingMatches.has(matchId)) {
+        const signature = await settlingMatches.get(matchId);
+        return sendJson(res, { signature });
+      }
+      const settlement = settleFromServer(matchId, payload.winnerAddress);
+      settlingMatches.set(matchId, settlement);
+      try {
+        const signature = await settlement;
+        sendJson(res, { signature });
+      } finally {
+        settlingMatches.delete(matchId);
+      }
+    } catch (error) {
+      sendJson(res, { error: error.message || 'Could not sponsor settlement.' }, 400);
+    }
+  });
 }
 
 // Proxies JSON-RPC calls to Solana Testnet/Devnet to bypass browser CORS/rate-limits
@@ -117,6 +269,9 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/solana-rpc') {
     return handleRpcProxy(req, res, url);
   }
+
+  if (req.method === 'GET' && url.pathname === '/api/fee-sponsor') return feeSponsorStatus(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/fee-sponsor/settle') return sponsorSettlement(req, res);
 
   if (req.method === 'GET' && url.pathname === '/health') {
     return sendJson(res, { status: 'ok', clients: clients.size, waiting: waiting.length, matches: rooms.size });
