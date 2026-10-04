@@ -16,8 +16,8 @@
 
 | Name | Role | Contact |
 |------|------|---------|
-| slaidayZ | Founder | [GitHub](https://github.com/slaidayZ) |
-| norm4el | Contributor | [GitHub](https://github.com/norm4el) |
+| slaidayZ | Founder | [Twitter](https://x.com/SlaidayZ) |
+| norm4el | Contributor | [Twitter](https://x.com/normbvid) |
 
 ---
 
@@ -152,8 +152,6 @@ Before any mainnet use, the game result must be verified independently, key mana
 - [Anchor program source](programs/games_hub_bets/src/lib.rs)
 - [Anchor program guide](programs/games_hub_bets/README.md)
 - [Deployed program on Solana Explorer](https://explorer.solana.com/address/CGU9v9Zt1PJECyZDcXVJpgzjukxy2ejAXbN1bUbGE8tq?cluster=devnet)
-- [Founder's Twitter](https://x.com/SlaidayZ)
-- [Co-Founder's Twitter](https://x.com/normbvid)
 - Presentation, social profiles, live application, and demo video: not published yet.
 
 ## Continuous Integration
