@@ -7,6 +7,19 @@ const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 const { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } = require('@solana/web3.js');
 
+function loadLocalEnv() {
+  const envFile = path.join(__dirname, '.env');
+  if (!fs.existsSync(envFile)) return;
+  for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!match || process.env[match[1]] !== undefined) continue;
+    const value = match[2].replace(/^(['"])(.*)\1$/, '$2');
+    process.env[match[1]] = value;
+  }
+}
+
+loadLocalEnv();
+
 const HOST = process.env.HOST || '::';
 const PORT = Number(process.env.PORT || 3000);
 const FILE = path.join(__dirname, 'index.html');
@@ -15,7 +28,8 @@ const FEE_PAYER_FILE = process.env.SERVER_FEE_PAYER_KEYPAIR || path.join(__dirna
 const BET_PROGRAM_ID = 'CGU9v9Zt1PJECyZDcXVJpgzjukxy2ejAXbN1bUbGE8tq';
 const SETTLE_DISCRIMINATOR = Buffer.from('6eeabd6067c3a114', 'hex');
 const MATCH_DISCRIMINATOR = Buffer.from('5908b5bdb30eb1f8', 'hex');
-const DEVNET = 'https://api.devnet.solana.com';
+const DEVNET = process.env.SOLANA_DEVNET_RPC_URL || 'https://api.devnet.solana.com';
+const TESTNET = process.env.SOLANA_TESTNET_RPC_URL || 'https://api.testnet.solana.com';
 const feePayer = loadFeePayer();
 const feeConnection = new Connection(DEVNET, 'confirmed');
 const sponsoredRequests = new Map();
@@ -66,14 +80,14 @@ async function feeSponsorStatus(req, res) {
       const rpcResult = await rpcResponse.json();
       if (!rpcResponse.ok || rpcResult.error) throw new Error(rpcResult.error?.message || `Devnet RPC returned HTTP ${rpcResponse.status}`);
       feeBalanceCache = rpcResult.result.value;
-      feeBalanceCacheExpiresAt = Date.now() + 15000;
+      feeBalanceCacheExpiresAt = Date.now() + 30000;
     }
     return sendJson(res, {
       address: feePayer.publicKey.toBase58(),
       balanceLamports: feeBalanceCache,
     });
   } catch (error) {
-    feeBalanceCacheExpiresAt = Date.now() + 10000;
+    feeBalanceCacheExpiresAt = Date.now() + 60000;
     console.warn(`Devnet fee sponsor balance unavailable: ${error.message}`);
     return sendJson(res, {
       address: feePayer.publicKey.toBase58(),
@@ -180,7 +194,9 @@ function sponsorSettlement(req, res) {
 // Proxies JSON-RPC calls to Solana Testnet/Devnet to bypass browser CORS/rate-limits
 function handleRpcProxy(req, res, url) {
   const cluster = url.searchParams.get('cluster') || 'testnet';
-  const targetHost = cluster === 'devnet' ? 'api.devnet.solana.com' : 'api.testnet.solana.com';
+  if (cluster !== 'devnet' && cluster !== 'testnet') return sendJson(res, { error: 'Unsupported RPC cluster.' }, 400);
+  const target = new URL(cluster === 'devnet' ? DEVNET : TESTNET);
+  if (target.protocol !== 'https:') return sendJson(res, { error: 'RPC endpoint must use HTTPS.' }, 500);
 
   let body = '';
   req.on('data', chunk => {
@@ -189,9 +205,9 @@ function handleRpcProxy(req, res, url) {
   });
   req.on('end', () => {
     const proxyReq = https.request({
-      hostname: targetHost,
-      port: 443,
-      path: '/',
+      hostname: target.hostname,
+      port: target.port || 443,
+      path: `${target.pathname}${target.search}`,
       method: 'POST',
       headers: {
         'content-type': 'application/json',

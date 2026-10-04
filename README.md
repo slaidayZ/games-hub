@@ -101,6 +101,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 On first start, the Node.js server creates `server-fee-payer.json` and prints its public address. The wager panel also displays the address and provides a copy button. Send a small amount of **Devnet SOL** to this wallet to fund automatic settlement fees. Keep the key file private and back it up securely if funded; deleting it creates a different wallet. The file is ignored by Git.
 
+### Avoid Devnet RPC rate limits
+
+The shared public Devnet RPC can return `429 Too Many Requests`, including while the site checks the sponsor balance or submits a payout. Configure a private Devnet RPC URL in a local `.env` file (the file is ignored by Git):
+
+```text
+SOLANA_DEVNET_RPC_URL=https://devnet.helius-rpc.com/?api-key=YOUR_ROTATED_API_KEY
+```
+
+Restart `npm.cmd start` after saving `.env`. The site server and browser RPC proxy both use this endpoint. Never commit or share the API key. If you previously pasted an API key into chat or another public place, revoke it and create a replacement first.
+
 ### Play and wager
 
 1. Set both the site and Phantom to **Devnet**.
@@ -141,10 +151,16 @@ Before any mainnet use, the game result must be verified independently, key mana
 
 ## Roadmap
 
-- Verify game results with an authoritative server or a verifiable game protocol.
-- Improve transaction recovery and RPC rate-limit handling.
-- Add more head-to-head games to the hub.
-- Review the contract and key-management model before considering mainnet.
+- [x] Build the local two-player Tetris duel.
+- [x] Add Phantom wallet registration and Devnet SOL wager creation, joining, settlement, cancellation, and timeout refunds.
+- [x] Add match recovery for submitted or interrupted transactions.
+- [x] Add server-side referee payouts for matches created with the server referee wallet.
+- [x] Add configurable private Devnet RPC support for the server and browser proxy.
+- [ ] Verify the full wager and automatic payout flow end to end on Devnet.
+- [ ] Improve transaction recovery for RPC outages, rate limits, and expired blockhashes.
+- [ ] Verify and protect game results with an authoritative server or verifiable game protocol.
+- [ ] Add more head-to-head games to the hub.
+- [ ] Review the contract, referee custody, and key-management model before considering mainnet.
 
 ## Resources
 

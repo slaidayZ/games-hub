@@ -1069,19 +1069,16 @@
       params,
     };
 
-    try {
+    if (activeClusterKey === 'localnet') {
       const res = await fetch(getRpcUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.error) throw new Error(json.error.message || 'RPC Error');
-        return json.result;
-      }
-    } catch (err) {
-      console.warn('Direct RPC fetch failed, trying local proxy /api/solana-rpc:', err.message);
+      if (!res.ok) throw new Error(`Local RPC returned HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error.message || 'RPC Error');
+      return json.result;
     }
 
     const proxyRes = await fetch(`/api/solana-rpc?cluster=${activeClusterKey}`, {
@@ -1089,7 +1086,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!proxyRes.ok) throw new Error('RPC call failed via direct & proxy');
+    if (!proxyRes.ok) throw new Error(`RPC proxy returned HTTP ${proxyRes.status}`);
     const proxyJson = await proxyRes.json();
     if (proxyJson.error) throw new Error(proxyJson.error.message || 'Proxy RPC Error');
     return proxyJson.result;
